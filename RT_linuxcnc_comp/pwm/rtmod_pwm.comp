@@ -1,0 +1,1126 @@
+component rtmod_pwm "permit to use pwm from TI chip with linuxCNC";
+pin in float pwm_percent;
+pin in bit enable_pwm = 0 if personality;
+variable int pinHeaderA;
+variable int pinNumA;
+variable int pinHeaderB;
+variable int pinNumB;
+variable int pwmGpioEn;
+variable char pwmPathA[128];
+variable char pwmPathB[128];
+variable char GPIOPath[128];
+variable char *pwmA;
+variable char *pwmB;
+variable char *GPIOpin;
+variable int pwmPeriodA;
+variable int pwmPeriodB;
+function pwmset;
+license "GPL"; // indicates GPL v2 or later
+author "Theo";
+option extra_setup;
+//option extra_cleanup;
+;;
+//#include <linux/io.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <wordexp.h>
+#include <unistd.h>
+#include "bbb.h"
+#define BBB_SLOTS "/sys/devices/bone_capemgr.*/slots"
+#define BBB_GPIO_EXPORT "/sys/class/gpio/export"
+
+
+EXTRA_SETUP() { 
+//int i;
+char path1[128],path2[128],path3[128];
+if(!count) count = 1;
+if(count) {
+       // for(i=0; i<count; i++) {
+		rtapi_print ("enter extrasetup pwm inst %u",personality);
+switch (personality-1){ 
+	case 0 :
+	pinHeaderA = 8;
+	pinHeaderB = 8;
+	pinNumA=13;
+	pinNumB=19;
+	pwmGpioEn=bbb_getGpio(bbb_getIndexByStr("P8_15")); //(GPIO 1-15)
+	pwmA="rtpwm0";
+	pwmB="rtpwm1";
+	GPIOpin="gpio1_15";
+	break;
+	case 1 :
+	pinHeaderA = 8;
+	pinHeaderB = 8;
+	pinNumA=34;
+	pinNumB=36;
+	pwmGpioEn=bbb_getGpio(bbb_getIndexByStr("P8_37")); //(GPIO 2-14)
+	pwmA="rtpwm2";
+	pwmB="rtpwm3";
+	GPIOpin="gpio2_14";
+	break;
+	case 2 :
+	pinHeaderA = 9;
+	pinHeaderB = 9;
+	pinNumA=21;
+	pinNumB=22;
+	pwmGpioEn=bbb_getGpio(bbb_getIndexByStr("P9_23")); //(GPIO 1-17)
+	pwmA="rtpwm4";
+	pwmB="rtpwm5";
+	GPIOpin="gpio1_17";
+	break;
+	};
+(bbb_enableGpio(pwmGpioEn)<0)?rtapi_print ("unable to load GPIO %c",pwmGpioEn):rtapi_print ("load GPIO %c",pwmGpioEn);
+(bbb_enablePwm(pinHeaderA, pinNumA)<0)?rtapi_print ("unable do enable pwmA"):rtapi_print ("enable pwmA");
+(bbb_enablePwm(pinHeaderB, pinNumB)<0)?rtapi_print ("unable do enable pwmB"):rtapi_print ("enable pwmB");
+	memset(GPIOPath, 0, sizeof(GPIOPath));
+	snprintf(GPIOPath, sizeof(GPIOPath), "%s/gpio%d/value", BBB_GPIOP, pwmGpioEn);
+//	GPIOPath = (char *)bbb_wildCardPath(GPIOPath);
+//	rtapi_print ("GPIOPath : %s",GPIOPath );
+	memset(pwmPathA, 0, sizeof(pwmPathA));
+	snprintf(pwmPathA, sizeof(pwmPathA), "%s/pwm_test_P%d_%d.*/duty", BBB_OCP2, pinHeaderA, pinNumA);
+//	pwmPathA = (char *)bbb_wildCardPath(pwmPathA);
+	rtapi_print ("pwmPathA : %s",pwmPathA );
+	memset(pwmPathB, 0, sizeof(pwmPathB));
+	snprintf(pwmPathB, sizeof(pwmPathB), "%s/pwm_test_P%d_%d.*/duty", BBB_OCP2, pinHeaderB, pinNumB);
+//	pwmPathB = (char *)bbb_wildCardPath(pwmPathB);
+	rtapi_print ("pwmPathB : %s",pwmPathB );
+	pwmPeriodA=bbb_getPwmPeriod(pinHeaderA, pinNumA);
+//	rtapi_print ("periodA : %i",pwmPeriodA);
+	pwmPeriodB=bbb_getPwmPeriod(pinHeaderB, pinNumB);
+//	rtapi_print ("periodB : %i",pwmPeriodB);
+//(bbb_setPwmPeriod(pinHeaderA, pinNumA, 10000)<0)?rtapi_print ("unable set periode pwmA"):rtapi_print ("set periode pwmA");//25KHz
+(bbb_setGpioDirection(pwmGpioEn, 1)<0)?rtapi_print ("unable to set output GPIO %c",pwmGpioEn):rtapi_print ("set output GPIO %c",pwmGpioEn);
+(bbb_setGpioValue(pwmGpioEn, 0,GPIOPath)<0)?rtapi_print ("unable to set GPIO %c",pwmGpioEn):rtapi_print ("set GPIO %c",pwmGpioEn);
+//(bbb_setPwmPercent(pinHeaderA, pinNumA, 100,pwmPathA,pwmPeriodA)<0)?rtapi_print ("unable to reset percent pwmA"):rtapi_print ("reset percent pwmA");
+//(bbb_setPwmPeriod(pinHeaderB, pinNumB, 10000)<0)?rtapi_print ("unable set periode pwmB"):rtapi_print ("set periode pwmB");//25KHz
+//(bbb_setPwmPercent(pinHeaderB, pinNumB, 100,pwmPathB,pwmPeriodB)<0)?rtapi_print ("unable to reset percent pwmB"):rtapi_print ("reset percent pwmB");
+rtapi_print ("fin extrasetup pwm");
+//}
+
+return 0;
+}
+}
+
+FUNCTION(pwmset) {
+int rc,devPwmA,devPwmB,devGPIO,ret;
+unsigned short int pwmPeriod,pwmPeriodFree,pwmCtl;
+
+
+char enaPwm="0";
+pwmCtl=pwmPeriod=pwmPeriodFree=0x0000;
+
+//rtapi_print("pwm function %s.",GPIOpin);
+//	rtapi_print("pwm periode %s",pwmA);
+	devPwmA=rt_dev_open(pwmA, 0);
+	//rtapi_print("devices pwmA ouvert");
+	devPwmB=rt_dev_open(pwmB, 0);
+	//rtapi_print("devices pwmB ouvert");
+//	devGPIO=rt_dev_open(GPIOpin, 2);
+//rtapi_print("devices GPIO ouvert : %i.",devGPIO);
+
+	//rc=rt_dev_read(devPwmA,&periodpwmchan,2);
+	rc=rt_dev_read(devPwmA,(void *)&pwmPeriod,2);
+		if (rc < 1) { rtapi_print("read periode device failed : %i",rc); return ;}
+
+//rtapi_print("pwm periode read int : %i",pwmPeriod);
+
+
+
+//rc=rt_dev_read(devPwmB,(void *)&pwmCtl,2);
+//		if (rc < 1) { rtapi_print("read periode device failed : %i",rc); return ;}
+//		rtapi_print("pwm ctl read int : %i",pwmCtl);
+//rtapi_print("pwm A read hexa : %x",pwmCtl);
+
+//rtapi_print("pwm ena pwm int :%i - char %c .",enable_pwm,enaPwm);
+
+	//if (enable_pwm == 0b1 ) {enaPwm = "1";} else {enaPwm = "0";};
+//	rtapi_print ("2GPIOPath : %s \n",GPIOPath );
+//	rtapi_print ("2pwmPathA : %s",pwmPathA );
+//	rtapi_print ("2pwmPathB : %s",pwmPathB);
+//rtapi_print("pwm enable :  %s",enaPwm);
+rc=bbb_setGpioValue(pwmGpioEn, enable_pwm,GPIOPath);
+//	rc=rt_dev_write(devGPIO,enaPwm,1);
+
+		if (rc < 0) { rtapi_print("write gpio device failed : %i",rc); return ;}
+
+if(pwm_percent<0){
+	//rtapi_print("pwm sens negatif");
+//bbb_setPwmPercent(pinHeaderA, pinNumA, 100,pwmPathA,pwmPeriodA);
+rc=rt_dev_write(devPwmA,(const void *)&pwmPeriod,2);
+if (rc < 1) { rtapi_print("write pwma device failed : %i",rc); return ;}
+//rtapi_print("pwma write :%i - ret :%i",pwmPeriod,rc);
+pwmPeriodFree=(1+pwm_percent)*pwmPeriod;
+
+
+//bbb_setPwmPercent(pinHeaderB, pinNumB, (1+pwm_percent)*100,pwmPathB,pwmPeriodB);
+rc=rt_dev_write(devPwmB,(const void *)&pwmPeriodFree,2);
+if (rc < 1) { rtapi_print("write pwmB device failed : %i",rc); return ;}
+//rtapi_print("pwmb write :%i - ret :%i",pwmPeriodFree,rc);
+}
+else{
+//bbb_setPwmPercent(pinHeaderB, pinNumB, 100,pwmPathB,pwmPeriodB);
+//bbb_setPwmPercent(pinHeaderA, pinNumA, (1-pwm_percent)*100,pwmPathA,pwmPeriodA);
+//rtapi_print("pwm sens positif");
+rc=rt_dev_write(devPwmB,(const void *)&pwmPeriod,2);
+if (rc < 1) { rtapi_print("write pwmb device failed : %i",rc); return ;}
+//rtapi_print("pwmb write :%i - ret :%i",pwmPeriod,rc);
+pwmPeriodFree=(1-pwm_percent)*pwmPeriod;
+
+
+//bbb_setPwmPercent(pinHeaderB, pinNumB, (1+pwm_percent)*100,pwmPathB,pwmPeriodB);
+rc=rt_dev_write(devPwmA,(const void *)&pwmPeriodFree,2);
+if (rc < 1) { rtapi_print("write pwm A device failed : %i",rc); return ;}
+//rtapi_print("pwma write :%i - ret :%i",pwmPeriodFree,rc);
+}
+
+
+rt_dev_close(devPwmA);	
+rt_dev_close(devPwmB);	
+//rt_dev_close(devGPIO);	
+return ;
+}
+
+
+//	Utils
+
+char *bbb_wildCardPath(char *path) {
+	size_t size = 0;
+	char *ptr = NULL;
+	static char ret[1024];
+	//char ret[1024];
+	wordexp_t p;
+	struct stat st;
+
+	wordexp(path, &p, 0);
+
+	if (p.we_wordc > 0) {
+		size = strlen(*(p.we_wordv));
+
+		if (size < sizeof(ret) && stat(*(p.we_wordv), &st) == 0) {
+			memset(ret, 0, sizeof(ret));
+			memcpy(ret, *(p.we_wordv), size);
+			ptr = ret;
+		}
+	}
+
+	wordfree(&p);
+	return ptr;
+}
+
+//	Get Index
+
+int bbb_getIndexByStr(char *str) {
+	int size = strlen(str);
+	int header = 0;
+	int pin = 0;
+
+	if (str[0] == 'P' && size >= 4) {
+		if (str[1] == '8') {
+			header = 8;
+		} else {
+			if (str[1] == '9') {
+				header = 9;
+			} else {
+				return -1;
+			}
+		}
+	} else {
+		return -1;
+	}
+
+	if (str[2] == '_') {
+		pin = atoi((str + 3));
+	} else {
+		return -1;
+	}
+
+	return bbb_getIndexByPin(header, pin);
+}
+
+int bbb_getIndexByPin(int header, int pin) {
+	int i;
+
+	for (i = 0; i < bbb_table_size; i++) {
+		if (bbb_pinout_table[i].header == header && bbb_pinout_table[i].pin == pin) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+int bbb_getIndexByGpio(int gpio) {
+	int i;
+
+	for (i = 0; i < bbb_table_size; i++) {
+		if (bbb_pinout_table[i].gpio == gpio) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+int bbb_getIndexBySignalName(char *signalname) {
+	int i;
+
+	for (i = 0; i < bbb_table_size; i++) {
+		if (strcmp(bbb_pinout_table[i].sig, signalname) == 0) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+int bbb_getIndexByName(char *name) {
+	int i;
+
+	for (i = 0; i < bbb_table_size; i++) {
+		if (strcmp(bbb_pinout_table[i].name, name) == 0) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+//	Index to values
+
+int bbb_getHeader(int index) {
+	if (index >= 0 && index <= bbb_table_size) {
+		return bbb_pinout_table[index].header;
+	}
+
+	return -1;
+}
+
+int bbb_getPin(int index) {
+	if (index >= 0 && index <= bbb_table_size) {
+		return bbb_pinout_table[index].pin;
+	}
+
+	return -1;
+}
+
+int bbb_getGpio(int index) {
+	if (index >= 0 && index <= bbb_table_size) {
+		return bbb_pinout_table[index].gpio;
+	}
+
+	return 0;
+}
+
+bbb_pin_type bbb_getType1(int index) {
+	if (index >= 0 && index <= bbb_table_size) {
+		return bbb_pinout_table[index].type1;
+	}
+
+	return 0;
+}
+
+bbb_pin_type bbb_getType2(int index) {
+	if (index >= 0 && index <= bbb_table_size) {
+		return bbb_pinout_table[index].type2;
+	}
+
+	return 0;
+}
+
+bbb_pin_type bbb_getType3(int index) {
+	if (index >= 0 && index <= bbb_table_size) {
+		return bbb_pinout_table[index].type3;
+	}
+
+	return 0;
+}
+
+char *bbb_getSignalName(int index) {
+	if (index >= 0 && index <= bbb_table_size) {
+		return bbb_pinout_table[index].name;
+	}
+
+	return "undefined";
+}
+
+char *bbb_getName(int index) {
+	if (index >= 0 && index <= bbb_table_size) {
+		return bbb_pinout_table[index].name;
+	}
+
+	return "undefined";
+}
+
+// 	Index to String Values
+
+char *bbb_getPinStrByIndex(int index) {
+	static char pinstr[10];
+
+	if (index >= 0 && index <= bbb_table_size) {
+		memset(pinstr, 0, sizeof(pinstr));
+		snprintf(pinstr, sizeof(pinstr), "P%d_%d", bbb_pinout_table[index].header, bbb_pinout_table[index].pin);
+
+		return pinstr;
+	}
+
+	return "undefined";
+}
+
+char *bbb_getGpioStrByIndex(int index) {
+	static char gpiostr[10];
+
+	if (index >= 0 && index <= bbb_table_size) {
+		memset(gpiostr, 0, sizeof(gpiostr));
+		snprintf(gpiostr, sizeof(gpiostr), "%d", bbb_pinout_table[index].gpio);
+
+		return gpiostr;
+	}
+
+	return "undefined";
+}
+
+char *bbb_getTypeStrByIndex(int index) {
+	static char typestr[56];
+
+	if (index >= 0 && index <= bbb_table_size) {
+		memset(typestr, 0, sizeof(typestr));
+		snprintf(typestr, sizeof(typestr), "%s %s %s", bbb_pinType2str(bbb_pinout_table[index].type1), bbb_pinType2str(bbb_pinout_table[index].type2), bbb_pinType2str(bbb_pinout_table[index].type3));
+
+		return typestr;
+	}
+
+	return "undefined";
+}
+
+char *bbb_getSignalNameByIndex(int index) {
+	if (index >= 0 && index <= bbb_table_size) {
+		return bbb_pinout_table[index].sig;
+	}
+
+	return "undefined";
+}
+
+char *bbb_getNameByIndex(int index) {
+	if (index >= 0 && index <= bbb_table_size) {
+		return bbb_pinout_table[index].name;
+	}
+
+	return "undefined";
+}
+
+//	Types
+
+char *bbb_pinType2str(bbb_pin_type type) {
+	char *ret = "undefined";
+
+	if (type >= BBB_NONE && type <= BBB_SPI) {
+		ret = bbb_pin_type_str[type];
+	}
+
+	return ret;
+}
+
+bbb_pin_type bbb_str2pinType(char *str) {
+	int i = 0;
+	bbb_pin_type ret = BBB_NONE;
+
+	for (i = 0; i < bbb_pin_type_str_size; i++) {
+		if (strcmp(bbb_pin_type_str[i], str) == 0) {
+			ret = i;
+			break;
+		}
+	}
+
+	return ret;
+}
+
+
+
+//	GPIO
+
+int bbb_enableGpio(int gpio) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (gpio > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/gpio%d", BBB_GPIOP, gpio);
+//rtapi_print("path gpio : %s.",path);
+		if ((wpath = bbb_wildCardPath(path)) == NULL) {
+			memset(path, 0, sizeof(path));
+			snprintf(path, sizeof(path), "%s/export", BBB_GPIOP);
+			//rtapi_print("path 2 gpio : %s.",path);
+
+			if ((wpath = bbb_wildCardPath(path)) != NULL) {
+				if ((fd = open(wpath, O_WRONLY)) < 0) {
+					return -1;
+				}
+
+				//rtapi_print("Enabling GPIO(%d)\n", gpio);
+
+				memset(ptr, 0, sizeof(ptr));
+				ret = snprintf(ptr, sizeof(ptr), "%d", gpio);
+
+				if (write(fd, ptr, ret) < 0) {
+					ret = -1;
+				} else {
+					ret = 0;
+				}
+
+				close(fd);
+			}
+		} else {
+			return 0;
+		}
+	}
+
+	return ret;
+}
+
+int bbb_disableGpio(int gpio) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (gpio > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/gpio%d", BBB_GPIOP, gpio);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			memset(path, 0, sizeof(path));
+			snprintf(path, sizeof(path), "%s/unexport", BBB_GPIOP);
+
+			if ((wpath = bbb_wildCardPath(path)) != NULL) {
+				if ((fd = open(wpath, O_WRONLY)) < 0) {
+					return -1;
+				}
+
+				LOG("Disabling GPIO(%d)\n", gpio);
+
+				memset(ptr, 0, sizeof(ptr));
+				ret = snprintf(ptr, sizeof(ptr), "%d", gpio);
+
+				if (write(fd, ptr, ret) < 0) {
+					ret = -1;
+				} else {
+					ret = 0;
+				}
+
+				close(fd);
+			}
+		}
+	}
+
+	return ret;
+}
+
+int bbb_setGpioDirection(int gpio, int direction_pwm) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char *ptr = "IN";
+	char *wpath = NULL;
+
+	if (gpio > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/gpio%d/direction", BBB_GPIOP, gpio);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_WRONLY)) < 0) {
+				return -1;
+			}
+
+			if (direction_pwm > 0) {
+				ret = 3;
+				ptr = "out";
+			} else {
+				ret = 2;
+				ptr = "in";
+			}
+
+			if (write(fd, ptr, ret) < 0) {
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+int bbb_getGpioDirection(int gpio) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (gpio > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/gpio%d/direction", BBB_GPIOP, gpio);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_RDONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+
+			if ((ret = read(fd, ptr, sizeof(ptr))) <= 0) {
+				close(fd);
+				return -1;
+			}
+
+			if (ret >= 2 && strncmp(ptr, "in", 2) == 0) {
+				ret = 0;
+			} else {
+				if (ret >= 3 && strncmp(ptr, "out", 3) == 0) {
+					ret = 1;
+				} else {
+					ret = -1;
+				}
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+int bbb_setGpioValue(int gpio, int value,char *gpiopath) {
+	static int ret = -1;
+	int fd = -1;
+	//char path[128];
+	char ptr[128];
+	//char *wpath = NULL;
+//rtapi_print("setgpio val :%i -- gpio : %i -- path : %s \n",value,gpio,gpiopath);
+	if (gpio > 0 && value >= 0) {
+	//	rtapi_print("in the if \n");
+		//memset(path, 0, sizeof(path));
+		//snprintf(path, sizeof(path), "%s/gpio%d/value", BBB_GPIOP, gpio);
+
+		//if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(gpiopath, O_WRONLY)) < 0) {
+				return -1;
+			}
+//rtapi_print("open ok \n");
+			memset(ptr, 0, sizeof(ptr));
+			ret = snprintf(ptr, sizeof(ptr), "%d", (value > 0) ? 1 : 0);
+
+			if (write(fd, ptr, ret) < 0) {
+				rtapi_print("write ko \n");
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		//}
+	}
+
+	return ret;
+}
+
+int bbb_getGpioValue(int gpio) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (gpio > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/gpio%d/value", BBB_GPIOP, gpio);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_RDONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+
+			if ((ret = read(fd, ptr, sizeof(ptr))) <= 0) {
+				close(fd);
+				return -1;
+			}
+
+			ret = atoi(ptr);
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+//	PWM
+
+int bbb_enablePwm(int header, int pin) {
+	int fd = -1;
+	int ret = -1;
+	char buffer[4096];
+	char ptr[128];
+	char *pwm = "am33xx_pwm";
+	int size = strlen(pwm);
+	char *wpath = NULL;
+
+	if ((wpath = bbb_wildCardPath(BBB_SLOTS)) != NULL) {
+		if ((fd = open(wpath, O_RDWR | O_APPEND)) < 0) {
+			return -1;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+			close(fd);
+			return -1;
+		}
+
+		if (strstr (buffer, pwm) == NULL) {
+			LOG("Enabling PWM\n");
+
+			if (write(fd, pwm, size) != size) {
+				close(fd);
+				return -1;
+			}
+		}
+
+		memset(ptr, 0, sizeof(ptr));
+		ret = snprintf(ptr, sizeof(ptr), "bone_pwm_P%d_%d", header, pin);
+
+		if (strncmp(buffer, ptr, ret) != 0) {
+			LOG("Enabling PWM P%d_%d\n", header, pin);
+
+			if (write(fd, ptr, ret) != ret) {
+				close(fd);
+				return -1;
+			}
+		}
+
+		close(fd);
+
+		return 0;
+	}
+
+	return -1;
+}
+
+int bbb_setPwmPeriod(int header, int pin, int time) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (header > 0 && pin > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/pwm_test_P%d_%d.*/period", BBB_OCP2, header, pin);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+                        if ((fd = open(wpath, O_WRONLY)) < 0) {
+                                return -1;
+                        }
+
+			if (bbb_setPwmDuty(wpath, 0) < 0) {
+				close(fd);
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+			ret = snprintf(ptr, sizeof(ptr), "%d", time);
+
+			if (write(fd, ptr, ret) < 0) {
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+int bbb_setPwmDuty(char *wpath, int time) {
+	static int ret = -1;
+	int fd = -1;
+	//char path[128];
+	char ptr[128];
+	//char *wpath = NULL;
+
+	//if (header > 0 && pin > 0) {
+		//memset(path, 0, sizeof(path));
+		//snprintf(path, sizeof(path), "%s/pwm_test_P%d_%d.*/duty", BBB_OCP2, header, pin);
+
+		//if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_WRONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+			ret = snprintf(ptr, sizeof(ptr), "%d", time);
+
+			if (write(fd, ptr, ret) < 0) {
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		//}
+	//}
+
+	return ret;
+}
+
+int bbb_setPwmHz(int header, int pin, char *hz) {
+	int time = 0;
+	int i, size = 0;
+	char ptr[128];
+	char c;
+	int f, z = -1, h = -1, k = -1, m = -1, fl = -1;
+
+	if (header > 0 && pin > 0 && hz != NULL) {
+		i = size = strlen(hz);
+
+		if (size <= 0) {
+			return -1;
+		}
+
+		for (i = (size - 1), f = -1, c = hz[i]; i >= 0; i--, c = hz[i], f = -1) {
+			switch (c) {
+				case 'z':
+				case 'Z':
+					f = z = i;
+					break;
+				case 'h':
+				case 'H':
+					f = h = i;
+					break;
+				case 'k':
+				case 'K':
+					f = k = i;
+					break;
+				case 'm':
+				case 'M':
+					f = m = i;
+					break;
+				case '.':
+					f = fl = i;
+				default:
+					break;
+			}
+
+			if (f < 0 && (c < 48 || c > 57)) {
+				return -1;
+			}
+		}
+
+		time = Hz;
+
+		if (z >= 0) {
+			size--;
+		}
+
+		if (h >= 0) {
+			size--;
+		}
+
+		if (k >= 0) {
+			time = kHz;
+			size--;
+		}
+
+		if (m >= 0) {
+			time = MHz;
+			size--;
+		}
+
+		if (size > 0) {
+			memset(ptr, 0, sizeof(ptr));
+			memcpy(ptr, hz, size);
+
+			if (fl > 0) {
+				time = (int) time / atof(ptr);
+			} else {
+				time = (int) time / atoi(ptr);
+			}
+		}
+
+		return bbb_setPwmPeriod(header, pin, time);
+	}
+
+	return -1;
+}
+
+int bbb_setPwmPercent(int header, int pin, int duty,char *wpath,int time) {
+	//int time = bbb_getPwmPeriod(header, pin);
+
+	if (header > 0 && pin > 0 && duty >= 0 && duty <= 100) {
+		return bbb_setPwmDuty(wpath, ((time / 100) * duty));
+	}
+
+	return -1;
+}
+
+int bbb_setPwmPolarity(int header, int pin, int polarity) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (header > 0 && pin > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/pwm_test_P%d_%d.*/polarity", BBB_OCP2, header, pin);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_WRONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+			ret = snprintf(ptr, sizeof(ptr), "%d", polarity);
+
+			if (write(fd, ptr, ret) < 0) {
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+int bbb_getPwmPeriod(int header, int pin) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (header > 0 && pin > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/pwm_test_P%d_%d.*/period", BBB_OCP2, header, pin);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_RDONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+
+			if (read(fd, ptr, sizeof(ptr)) <= 0) {
+				ret = -1;
+			} else {
+				ret = atoi(ptr);
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+int bbb_getPwmDuty(int header, int pin) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (header > 0 && pin > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/pwm_test_P%d_%d.*/duty", BBB_OCP2, header, pin);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_RDONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+
+			if (read(fd, ptr, sizeof(ptr)) <= 0) {
+				ret = -1;
+			} else {
+				ret = atoi(ptr);
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+char *bbb_getPwmHz(int header, int pin) {
+	static char ptr[128];
+
+	if (header > 0 && pin > 0) {
+		int time = bbb_getPwmPeriod(header, pin);
+
+		memset(ptr, 0, sizeof(ptr));
+		snprintf(ptr, sizeof(ptr), "%dHz", (int) (Hz / time));
+
+		return ptr;
+	}
+
+	return "undefined";
+}
+
+int bbb_getPwmPercent(int header, int pin) {
+	static int ret = -1;
+
+	if (header > 0 && pin > 0) {
+		int period = bbb_getPwmPeriod(header, pin);
+		int duty = bbb_getPwmDuty(header, pin);
+
+		ret = ((duty * 100) / period);
+	}
+
+	return ret;
+}
+
+int bbb_getPwmPolarity(int header, int pin) {
+	int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (header > 0 && pin > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/pwm_test_P%d_%d.*/polarity", BBB_OCP2, header, pin);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_RDONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+
+			if (read(fd, ptr, sizeof(ptr)) <= 0) {
+				ret = -1;
+			} else {
+				ret = atoi(ptr);
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+//	Serial
+
+int bbb_enableSerial(int index) {
+        int fd = -1;
+        static int ret = -1;
+        char buffer[1024];
+        char path[128];
+        char *wpath = NULL;
+
+        if ((wpath = bbb_wildCardPath(BBB_SLOTS)) != NULL) {
+                if ((fd = open(wpath, O_RDWR | O_APPEND)) < 0) {
+                        return -1;
+                }
+
+                memset(buffer, 0, sizeof(buffer));
+
+                if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+                        return -1;
+                }
+
+		memset(path, 0, sizeof(path));
+		ret = snprintf(path, sizeof(path), "BB-UART%d", index);
+
+                if (strncmp(buffer, path, ret) != 0) {
+                        LOG("Enabling Serial %s\n", path);
+
+                        if (write(fd, path, ret) != ret) {
+                                return -1;
+                        }
+                }
+
+                return 0;
+        }
+
+	return -1;
+}
+
+//	Debug
+
+void bbb_showByIndex(int index) {
+	LOG("%s %s %s %s %s\n", bbb_getPinStrByIndex(index), bbb_getGpioStrByIndex(index), bbb_getTypeStrByIndex(index), bbb_getSignalNameByIndex(index), bbb_getNameByIndex(index));
+}
+
+void bbb_showPin(char *str) {
+	bbb_showByIndex(bbb_getIndexByStr(str));
+}
+
+void bbb_showAll() {
+	int i;
+
+	for (i = 0; i < bbb_table_size; i++) {
+		bbb_showByIndex(i);
+	}
+}
+
+void bbb_showByType(bbb_pin_type type) {
+	int i;
+
+	for (i = 0; i < bbb_table_size; i++) {
+		if (bbb_pinout_table[i].type1 == type || bbb_pinout_table[i].type2 == type || bbb_pinout_table[i].type2 == type) {
+			bbb_showByIndex(i);
+		}
+	}
+}
+
+void bbb_showByTypeOnly(bbb_pin_type type) {
+	int i;
+
+	for (i = 0; i < bbb_table_size; i++) {
+		int found = 0;
+
+		if (bbb_pinout_table[i].type1 == type || bbb_pinout_table[i].type2 == type || bbb_pinout_table[i].type2 == type) {
+			found = 1;
+		}
+
+		if (type != BBB_ANALOG) {
+			if (bbb_pinout_table[i].type1 == type || bbb_pinout_table[i].type1 == BBB_GPIO) {
+				if (bbb_pinout_table[i].type2 == type || bbb_pinout_table[i].type2 == BBB_GPIO) {
+					if (bbb_pinout_table[i].type3 == type || bbb_pinout_table[i].type3 == BBB_GPIO) {
+						if (found) {
+							bbb_showByIndex(i);
+						}
+					}
+				}
+			}
+		}
+
+		else {
+			if (found) {
+				bbb_showByIndex(i);
+			}
+		}
+	}
+}

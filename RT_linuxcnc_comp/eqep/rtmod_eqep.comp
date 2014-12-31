@@ -1,0 +1,152 @@
+component rtmod_eqep "permit to use eqep from TI chip with linuxCNC";
+pin out float eqepPosition = 0;
+param rw unsigned eqepCount = 0;
+pin in unsigned  positionScale = 1;
+param rw unsigned eqepChanel =0 if personality ;
+variable char *eqepPath;
+function update_position; // add nofp if floating point not needed
+license "GPL"; // indicates GPL v2 or later
+author "Theo";
+option extra_setup;
+//option extra_link_args yes;
+//option extra_compile_args yes;
+//option extra_cleanup;
+;;
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <wordexp.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <rtdm/rtdm.h>
+#include <native/task.h>
+#define BBB_SLOTS "/sys/devices/bone_capemgr.*/slots"
+#ifndef LOG
+#define LOG(...) printf(__VA_ARGS__);
+#endif
+
+//extra_link_args="-I/usr/xenomai/include/ -L/usr/xenomai/lib -lpthread  -lnative -lrtdm  -lxenomai";
+//extra_compile_args="-I/usr/xenomai/include/ -L/usr/xenomai/lib -lpthread  -lnative -lrtdm  -lxenomai";
+// selection of base mem @ function of eqep channel. EQEP is a subsystem in pwmss module
+EXTRA_SETUP() { 
+//int i;
+
+rtapi_print ("enter extrasetup comp number %u and chanel %u",count,comp_id);
+if(!count) count = 1;
+if(count) {
+        //for(i=0; i<count; i++) {
+		rtapi_print ("enter extrasetup eqep inst %u",personality);
+switch (personality-1){  
+	case 0 :
+	bbb_enableEqep(0);
+	eqepPath="rteqep0";
+	break;
+	case 1 :
+	bbb_enableEqep(1);
+	eqepPath="rteqep1";
+	break;
+	case 2 :
+	bbb_enableEqep(2);
+	eqepPath="rteqep2";
+	break;
+	};
+//}	
+
+return 0;
+
+}}
+
+
+FUNCTION(update_position) {
+	int rc,dev,ret;
+        char buf[4]="0000";
+//printf("eqep_count : %s \n", buf);
+//long long start_time=rtapi_get_clocks();
+// Open the file representing the position
+//rtapi_print("open eqep device start");
+	dev=rt_dev_open(eqepPath, 0);
+//	rtapi_print("eqep device %i opened",dev);
+        rc = rt_dev_read(dev, &buf, 4);
+        if (rc < 1) { rtapi_print("read  eqep device failed : %i",rc); return ;}
+//rtapi_print("eqep_buf : %s \n", buf);
+// in buf the count is !
+eqepCount=*buf;
+//rtapi_print("eqep_count : %i \n", eqepCount);
+	rt_dev_close(dev);	
+
+// Commit changes 
+//trnasform count to position using scale ie impulsion per unit)
+eqepPosition=(float)eqepCount/positionScale;
+//rtapi_print("eqep_position : %f \n", eqepPosition);
+//long long end_time=rtapi_get_clocks();
+//long int deltat = (long int)(end_time - start_time);
+//rtapi_print ("duree eqep %u %u",comp_id,deltat);
+//return rc;
+return;
+}
+
+char *bbb_wildCardPath(char *path) {
+	size_t size = 0;
+	char *ptr = NULL;
+	static char ret[1024];
+	wordexp_t p;
+	struct stat st;
+
+	wordexp(path, &p, 0);
+
+	if (p.we_wordc > 0) {
+		size = strlen(*(p.we_wordv));
+
+		if (size < sizeof(ret) && stat(*(p.we_wordv), &st) == 0) {
+			memset(ret, 0, sizeof(ret));
+			memcpy(ret, *(p.we_wordv), size);
+			ptr = ret;
+		}
+	}
+
+	wordfree(&p);
+	return ptr;
+}
+
+int bbb_enableEqep(int eqepChan) {
+	int fd = -1;
+	int ret = -1;
+	char buffer[4096];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if ((wpath = bbb_wildCardPath(BBB_SLOTS)) != NULL) {
+		if ((fd = open(wpath, O_RDWR | O_APPEND)) < 0) {
+			return -1;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+			close(fd);
+			return -1;
+		}
+
+
+		memset(ptr, 0, sizeof(ptr));
+		ret = snprintf(ptr, sizeof(ptr), "bone_eqep%d", eqepChan);
+
+		if (strncmp(buffer, ptr, ret) != 0) {
+			LOG("Enabling eqep %d\n",eqepChan);
+
+			if (write(fd, ptr, ret) != ret) {
+				close(fd);
+				return -1;
+			}
+		}
+
+		close(fd);
+
+		return 0;
+	}
+
+	return -1;
+}
