@@ -1,0 +1,7 @@
+<pyvcp>
+<button>
+     <halpin>"o100"</halpin>
+     <text>"Touch Off Z"</text>
+     <font>('fixed',10)</font>
+</button>
+</pyvcp>

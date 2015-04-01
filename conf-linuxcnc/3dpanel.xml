@@ -1,0 +1,23 @@
+<pyvcp>
+    <label>
+        <text>"Extruder Temp °:"</text>
+    </label>
+    <bar>
+        <halpin>"extruder-temp"</halpin>
+        <max_>250</max_>
+    </bar>
+    <label>
+        <text>"Bed  Temp °:"</text>
+    </label>
+    <bar>
+        <halpin>"bed-temp"</halpin>
+        <max_>120</max_>
+    </bar>
+    <label>
+         <text>"Fan Speed % :"</text>
+    </label>
+    <bar>
+        <halpin>"fan-speed"</halpin>
+        <max_>100</max_>
+    </bar>
+</pyvcp>

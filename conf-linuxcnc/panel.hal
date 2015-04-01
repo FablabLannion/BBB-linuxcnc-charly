@@ -1,0 +1,3 @@
+net textruder => pyvcp.extruder-temp
+net tbed => pyvcp.bed-temp
+#net sfan => fan-speed

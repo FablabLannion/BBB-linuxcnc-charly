@@ -1,0 +1,126 @@
+loadusr -w usrmod_init
+loadusr -W usrmod_jog
+loadusr -W usrmod_potar
+
+
+# load realtime modules
+# kinematics
+loadrt trivkins
+loadrt [EMCMOT]EMCMOT base_thread_fp=1 base_period_nsec=[EMCMOT]BASE_PERIOD servo_period_nsec=[EMCMOT]SERVO_PERIOD num_joints=3
+loadrt rtmod_pwm count=3 personality=1,2,3
+loadrt rtmod_gpio
+loadrt at_pid num_chan=3
+
+
+# define the order of execution for RT code
+
+
+addf rtmod-eqep.0.update-position  base-thread
+addf rtmod-eqep.1.update-position  base-thread
+addf rtmod-eqep.2.update-position  base-thread
+addf rtmod-pwm.0.pwmset  base-thread
+addf rtmod-pwm.1.pwmset  base-thread
+addf rtmod-pwm.2.pwmset  base-thread
+addf rtmod-gpio.0.powerctl servo-thread
+
+addf motion-command-handler    servo-thread
+addf motion-controller         servo-thread
+addf pid.0.do-pid-calcs        base-thread
+addf pid.1.do-pid-calcs        base-thread
+addf pid.2.do-pid-calcs        base-thread
+
+
+
+
+setp rtmod-eqep.0.positionScale [AXIS_0]INPUT_SCALE
+setp rtmod-eqep.1.positionScale [AXIS_1]INPUT_SCALE
+setp rtmod-eqep.2.positionScale [AXIS_2]INPUT_SCALE
+
+###joystick###
+net jogxupinc usrmod-jog.0.xjogincup => halui.jog.0.increment-plus
+net jogyupinc usrmod-jog.0.yjogincup => halui.jog.1.increment-plus
+net jogzupinc usrmod-jog.0.zjogincup => halui.jog.2.increment-plus 
+net jogxdowninc usrmod-jog.0.xjogincdown => halui.jog.0.increment-minus
+net jogydowninc usrmod-jog.0.yjogincdown => halui.jog.1.increment-minus
+net jogzdowninc usrmod-jog.0.zjogincdown => halui.jog.2.increment-minus 
+net jogxup usrmod-jog.0.xjogup => halui.jog.0.plus
+net jogyup usrmod-jog.0.yjogup => halui.jog.1.plus
+net jogzup usrmod-jog.0.zjogup => halui.jog.2.plus
+net jogxdown usrmod-jog.0.xjogdown => halui.jog.0.minus
+net jogydown usrmod-jog.0.yjogdown => halui.jog.1.minus
+net jogzdown usrmod-jog.0.zjogdown => halui.jog.2.minus
+
+
+###potar###
+net joginc usrmod-jog.0.joginc => halui.jog.0.increment halui.jog.1.increment halui.jog.2.increment halui.jog.selected.increment
+setp halui.jog-speed 4500
+
+
+setp halui.feed-override.scale 1
+setp halui.feed-override.direct-value 1
+net speedcount usrmod-potar.0.speedcounts => halui.feed-override.counts
+
+# the values below come from the ini
+setp pid.0.Pgain [AXIS_0]P
+setp pid.0.Igain [AXIS_0]I
+setp pid.0.Dgain [AXIS_0]D
+setp pid.1.Pgain [AXIS_1]P
+setp pid.1.Igain [AXIS_1]I
+setp pid.1.Dgain [AXIS_1]D
+setp pid.2.Pgain [AXIS_2]P
+setp pid.2.Igain [AXIS_2]I
+setp pid.2.Dgain [AXIS_2]D
+setp pid.0.tune-type  [AXIS_0]TUNETYPE
+setp pid.0.deadband [AXIS_0]DEADBAND
+setp pid.0.tune-type  [AXIS_1]TUNETYPE
+setp pid.1.deadband [AXIS_1]DEADBAND
+setp pid.2.tune-type  [AXIS_2]TUNETYPE
+setp pid.2.deadband [AXIS_2]DEADBAND
+
+setp pid.0.maxoutput 1.0
+setp pid.1.maxoutput 1.0
+setp pid.2.maxoutput 1.0
+
+
+#comand sent from axis to PID
+# to autotune pid comment lines pos-cmd and enable 
+# and uncomment xenable2 below
+
+net Xenable axis.0.amp-enable-out => pid.0.enable rtmod-gpio.0.enable-pwm
+#net Xenable2 axis.0.amp-enable-out => rtmod-gpio.0.enable-pwm 
+net Yenable axis.1.amp-enable-out => pid.1.enable
+net Zenable axis.2.amp-enable-out => pid.2.enable
+
+net Xpos-cmd axis.0.motor-pos-cmd => pid.0.command
+net Ypos-cmd axis.1.motor-pos-cmd => pid.1.command
+net Zpos-cmd axis.2.motor-pos-cmd => pid.2.command
+
+net Xvel-cmd  pid.0.output => rtmod-pwm.0.pwm-percent
+net Yvel-cmd  pid.1.output => rtmod-pwm.1.pwm-percent
+net Zvel-cmd  pid.2.output => rtmod-pwm.2.pwm-percent
+
+net Xpos-fb rtmod-eqep.0.eqepPosition => pid.0.feedback axis.0.motor-pos-fb
+net Ypos-fb rtmod-eqep.1.eqepPosition => pid.1.feedback axis.1.motor-pos-fb
+net Zpos-fb rtmod-eqep.2.eqepPosition => => pid.2.feedback axis.2.motor-pos-fb
+
+
+
+#### fin de course
+ # connect rtmod-gpio.0.fcx to X home and min limit
+ #net X-home parport.0.pin-04-in => axis.0.home-sw-in axis.0.neg-lim-sw-in
+net X-home rtmod-gpio.0.fcx => axis.0.neg-lim-sw-in axis.0.pos-lim-sw-in axis.0.home-sw-in
+ # connect pin 11 to Y home and min limit
+ #net Y-home parport.0.pin-08-in => axis.1.home-sw-in axis.1.neg-lim-sw-in
+net Y-home rtmod-gpio.0.fcy => axis.1.neg-lim-sw-in axis.1.pos-lim-sw-in axis.1.home-sw-in
+ # connect pin 12 to Z home and min limit
+ #net Z-home parport.0.pin-12-in => axis.2.home-sw-in axis.2.neg-lim-sw-in
+net Z-home rtmod-gpio.0.fcz => axis.2.neg-lim-sw-in axis.2.pos-lim-sw-in axis.2.home-sw-in
+ # connect pin 13 to emergencystop   a voir
+ #net estop-loop parport.0.pin-13-in-not => axis.0.pos-lim-sw-in 
+ #axis.1.pos-lim-sw-in axis.2.pos-lim-sw-in
+
+
+
+net estop-loop iocontrol.0.user-enable-out iocontrol.0.emc-enable-in
+net tool-prep-loop iocontrol.0.tool-prepare iocontrol.0.tool-prepared
+net tool-change-loop iocontrol.0.tool-change iocontrol.0.tool-changed
