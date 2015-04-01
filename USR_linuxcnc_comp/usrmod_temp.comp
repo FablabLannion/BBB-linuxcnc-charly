@@ -1,0 +1,231 @@
+component usrmod_temp;
+// gestion des temperatures (extruder et bed) et ventillo
+
+
+option userspace;
+
+pin out bit exttempok;
+pin out bit bedtempok;
+pin out float bedtemp;
+pin out float extrudertemp;
+pin in unsigned fanspeed;// a voir comment le traduire en vrai. peuetre avec un atmega 328 (arduino)
+pin in bit extact;
+pin in bit bedact;
+//pin in bit extwait;
+//pin in bit bedwait;
+pin in float extconsign;
+pin in float bedconsign;
+//variable int oldextact;
+//variable int oldbedact;
+license "GPL"; // indicates GPL v2 or later
+;;
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <wordexp.h>
+#include <unistd.h>
+
+
+//#define LOG(...) printf(__VA_ARGS__);
+#define LOG(...)
+#define BBB_SLOTS "/sys/devices/bone_capemgr.*/slots"
+#define BBB_HELPER "/sys/devices/ocp.*/helper.*"
+#define BBB_GPIOP "/sys/class/gpio"	
+#define BTAIN 6
+#define EXTAIN 5
+#define POLLTIME 250000
+#define NUMAXIS 3
+#define EXTACTGPIO 38 //1-6 gpio P8_3
+#define BEDACTGPIO 39 //1-7 gpio P8_4
+
+char *bbb_wildCardPath(char *path);
+int bbb_enableADC();
+int bbb_getADC(int id); 
+int bbb_setGpioValue(int gpio, int value);
+int tempcalc (int adcval);
+
+
+void user_mainloop(void) {
+int i,val;
+
+//bbb_enableADC();
+LOG("before ADC POLL\n");
+    while(1) {
+
+        usleep(POLLTIME);
+        FOR_ALL_INSTS() {
+			
+	/*	if (oldextact!=extact)
+			{
+				oldextact=extact;
+				bbb_setGpioValue(EXTACTGPIO, oldextact);
+		}
+		if (oldbedact!=bedact)
+			{
+				oldbedact=dedact;
+				bbb_setGpioValue(BEDACTGPIO, oldbedact);
+		}*/
+		
+		extrudertemp=tempcalc(bbb_getADC(EXTAIN));
+		bedtemp=tempcalc(bbb_getADC(BTAIN));
+		
+		if (extact==1){
+			
+			if (extconsign-extrudertemp >= 0.001 ){
+				exttempok=0;
+				bbb_setGpioValue(EXTACTGPIO, 1);
+			}else{
+				exttempok=1;
+				bbb_setGpioValue(EXTACTGPIO, 0);
+			}
+		}
+		
+		
+		if (bedact==1){
+			
+			if (bedconsign-bedtemp >= 0.001 ){
+				exttempok=0;
+				bbb_setGpioValue(BEDACTGPIO, 1);
+			}else{
+				exttempok=1;
+				bbb_setGpioValue(BEDACTGPIO, 0);
+			}
+		}
+		
+		
+		}
+    }
+}
+
+//	Utils
+
+char *bbb_wildCardPath(char *path) {
+	size_t size = 0;
+	char *ptr = NULL;
+	static char ret[1024];
+	wordexp_t p;
+	struct stat st;
+
+	wordexp(path, &p, 0);
+
+	if (p.we_wordc > 0) {
+		size = strlen(*(p.we_wordv));
+
+		if (size < sizeof(ret) && stat(*(p.we_wordv), &st) == 0) {
+			memset(ret, 0, sizeof(ret));
+			memcpy(ret, *(p.we_wordv), size);
+			ptr = ret;
+		}
+	}
+
+	wordfree(&p);
+	return ptr;
+}
+
+//	ADC
+
+/*int bbb_enableADC() {
+	int fd = -1;
+	static int ret = -1;
+	char buffer[1024];
+	char *ptr = "cape-bone-iio";
+	int size = strlen(ptr);
+	char *wpath = NULL;
+
+	if ((wpath = bbb_wildCardPath(BBB_SLOTS)) != NULL) {
+		if ((fd = open(wpath, O_RDWR | O_APPEND)) < 0) {
+			return -1;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+			return -1;
+		}
+
+		if (strncmp(buffer, ptr, size) != 0) {
+			LOG("Enabling ADC\n");
+
+			if (write(fd, ptr, size) != size) {
+				return -1;
+			}
+		}
+
+		return 0;
+	}
+
+	return -1;
+}*/
+
+int bbb_getADC(int id) {
+	int fd = -1;
+	static int ret = -1;
+	char buffer[128];
+	char path[128];
+	char *wpath = NULL;
+
+	memset(path, 0, sizeof(path));
+	snprintf(path, sizeof(path), "%s/AIN%d", BBB_HELPER, id);
+
+	if ((wpath = bbb_wildCardPath(path)) != NULL) {
+		if ((fd = open(wpath, O_RDONLY)) < 0) {
+			return -1;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+			close(fd);
+			return -1;
+		}
+
+		ret = atoi(buffer);
+	}
+	close(fd);
+	return ret;
+}
+
+int bbb_setGpioValue(int gpio, int value) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (gpio > 0 && value >= 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/gpio%d/value", BBB_GPIOP, gpio);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_WRONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+			ret = snprintf(ptr, sizeof(ptr), "%d", (value > 0) ? 1 : 0);
+
+			if (write(fd, ptr, ret) < 0) {
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+int tempcalc(int adcval){
+
+float newtemp;
+LOG("ADC temp val : %i\n",adcval);
+/*todo*/	
+newtemp=adcval/10;
+
+return newtemp;
+}

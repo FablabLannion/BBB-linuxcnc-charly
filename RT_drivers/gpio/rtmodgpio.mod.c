@@ -31,6 +31,7 @@ __attribute__((section("__versions"))) = {
 	{ 0x5ad53b72, "__rtdm_synch_flush" },
 	{ 0x67c2fa54, "__copy_to_user" },
 	{ 0xac8f37b2, "outer_cache" },
+	{ 0xfbc74f64, "__copy_from_user" },
 	{ 0xf8892f01, "rtdm_sem_up" },
 	{ 0x906efc50, "rtdm_sem_down" },
 	{ 0xefd6cf06, "__aeabi_unwind_cpp_pr0" },
@@ -42,4 +43,4 @@ __attribute__((section(".modinfo"))) =
 "depends=";
 
 
-MODULE_INFO(srcversion, "9A871CB7B168CFF91521CD5");
+MODULE_INFO(srcversion, "B4BC280B0DD51D52FA06A90");

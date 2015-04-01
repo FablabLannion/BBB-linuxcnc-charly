@@ -1,0 +1,4 @@
+sudo rm ../machinekit-dev/bin/usrmod_init
+comp --install usrmod_init.comp
+sudo chown root:root ../machinekit-dev/bin/usrmod_init 
+sudo chmod u+s ../machinekit-dev/bin/usrmod_init

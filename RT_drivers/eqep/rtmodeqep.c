@@ -21,7 +21,9 @@
 static unsigned long count=0;
 //RealTime RTM driver
  static unsigned long        ioaddr[MAX_DEVICES]={0x48300180,0x48302180,0x48304180};
+static unsigned long        maxCountaddr[MAX_DEVICES]={0x48300188,0x48302188,0x48304188};
  static void* iomembase[MAX_DEVICES];
+  static void* maxCountmembase[MAX_DEVICES];
  static struct rtdm_device   *device[MAX_DEVICES];
  /**
   * The structure of the buffer
@@ -78,10 +80,9 @@ static unsigned long count=0;
                      rtdm_user_info_t * user_info, void *buf,
                      size_t nbyte)
  {
-     //int ret, addr,directret;
+
      int ret, addr;
-//rtdm_printk(KERN_DEBUG "RTDM read count : %i .\n",count);
- //   count++;
+
      /* take the semaphore */
      rtdm_sem_down(&sem);
 
@@ -91,24 +92,11 @@ static unsigned long count=0;
 	DEBUG_PRINT(KERN_DEBUG "RTDM read  addr : %x \n",ioaddr[addr]);
 	DEBUG_PRINT(KERN_DEBUG "RTDM read ioremap addr : %x \n",iomembase[addr]);
 	
-   // size = (buffer.size > nbyte) ? nbyte : buffer.size;
- //   ret = rtdm_safe_copy_to_user(user_info, buf, ioaddr[addr], 4);
- //DEBUG_PRINT(KERN_DEBUG "RTDM read ioaddr eqep %i, val %x \n",ret,(int)buf);
- //directret=ioread32(ioaddr[addr]);
- //DEBUG_PRINT(KERN_DEBUG "RTDM read ioaddr direct eqep val %x \n",directret);
+
  ret = rtdm_safe_copy_to_user(user_info, buf, iomembase[addr], 4);
- //DEBUG_PRINT(KERN_DEBUG "RTDM read iomemebase eqep : ret %i, val %x \n",ret,(int)buf);
+
  DEBUG_PRINT(KERN_DEBUG "RTDM read iomemebase eqep : ret %i, val %s \n",ret,buf);
- //ret = rtdm_safe_copy_to_user(user_info, buf, &iomembase[addr], 4);
- //DEBUG_PRINT(KERN_DEBUG "RTDM read &iomemebase eqep : ret %i, val %x \n",ret,(int)buf);
- //DEBUG_PRINT(KERN_DEBUG "RTDM read &iomemebase eqep : ret %i, val %s \n",ret,buf);
- //directret=ioread32(iomembase[addr]);
- //DEBUG_PRINT(KERN_DEBUG "RTDM read iomemebase direct eqep val %x \n",directret);
 
-
- 
-     /* clean the kernel buffer */
-    //buffer.size = 0;
 /* release the semaphore */
      rtdm_sem_up(&sem);
     /* if an error has occured, send it to user */
@@ -128,17 +116,17 @@ static ssize_t eqep_rtdm_write_rt(struct rtdm_dev_context *context,
                       rtdm_user_info_t * user_info,
                       const void *buf, size_t nbyte)
  {
-     int ret;
- 
-     /* write the user buffer in the kernel buffer */
-     buffer.size = (nbyte > SIZE_MAX) ? SIZE_MAX : nbyte;
-     ret = rtdm_safe_copy_from_user(user_info, buffer.data, buf, buffer.size);
- 
-     /* if an error has occured, send it to user */
-     if (ret)
-         return ret;
- 
-     /* release the semaphore */
+     int maxCount,addr;
+     maxCount=0xFFFFFFFF;
+  rtdm_sem_down(&sem);
+DEBUG_PRINT(KERN_DEBUG "RTDM enter eqep write \n");
+    /* write the io reg and sent it to user space */
+	
+	addr=context->device->device_id;
+	DEBUG_PRINT(KERN_DEBUG "RTDM write maxcount eqep val %x \n",maxCountmembase[addr]);
+iowrite32(0xffffffff,maxCountmembase[addr]);
+DEBUG_PRINT(KERN_DEBUG "RTDM write done \n");
+
      rtdm_sem_up(&sem);
  
      return nbyte;
@@ -157,11 +145,11 @@ static ssize_t eqep_rtdm_write_rt(struct rtdm_dev_context *context,
     .device_name = "",
  
     .open_nrt = eqep_rtdm_open,
-    .open_rt  = eqep_rtdm_open,
+   // .open_rt  = eqep_rtdm_open,
  
      .ops = {
          .close_nrt = eqep_rtdm_close,
-         .close_rt  = eqep_rtdm_close,
+    //     .close_rt  = eqep_rtdm_close,
          .read_rt   = eqep_rtdm_read_rt,
          .write_rt  = eqep_rtdm_write_rt,
     },
@@ -190,7 +178,7 @@ static ssize_t eqep_rtdm_write_rt(struct rtdm_dev_context *context,
      for (i = 0; i < MAX_DEVICES; i++)
          if (device[i]) {
              rtdm_dev_unregister(device[i], 1000);
-             release_region(ioaddr[i], 4);
+            // release_region(ioaddr[i], 4);
              kfree(device[i]);
          }
 
@@ -232,19 +220,19 @@ static ssize_t eqep_rtdm_write_rt(struct rtdm_dev_context *context,
    if (! iomembase[i]){DEBUG_PRINT(KERN_DEBUG "failed RTDM req opremap  eqep %d \n",i);
 		kfree(eqepdevice);
 	 return -1;}
-	 
-    /* DEBUG_PRINT(KERN_DEBUG "RTDM req region ioaddreqep %d \n",i);
-	 if (!request_region(ioaddr[i], 4, eqepdevice->device_name)){
-		 DEBUG_PRINT(KERN_DEBUG "ECHEC RTDM req region eqep %d  \n",i);
-	 kfree(eqepdevice);
-	 return -1;
-	 };*/
+	 DEBUG_PRINT(KERN_DEBUG "RTDM req ioremap maxcounteqep %c \n",eqepdevice->device_name);
+    maxCountmembase[i]= __arm_ioremap(maxCountaddr[i], 4, 2);
+    DEBUG_PRINT(KERN_DEBUG "RTDM maxCountmembase eqep %d",maxCountmembase[i]);
+   if (! maxCountmembase[i]){DEBUG_PRINT(KERN_DEBUG "failed RTDM req opremap  maxcounteqep %d \n",i);
+		kfree(eqepdevice);
+	 return -1;}
+
 	 
 	 DEBUG_PRINT(KERN_DEBUG "RTDM register eqep %d",i);
      ret=rtdm_dev_register(eqepdevice);
 	 if (ret < 0) {
 		 DEBUG_PRINT(KERN_DEBUG "ECHEC RTDM register eqep %d",i);
-	 release_region(ioaddr[i], 4);
+	 //release_region(ioaddr[i], 4);
 	 return -1;
 	 }
 	 device[i] = eqepdevice;

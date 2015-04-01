@@ -1,0 +1,169 @@
+component usrmod_potar; // permet le reglage de la vitesse d'avance et de la vitesse de jog via 2 potars
+//option extra_setup;
+option userspace;
+
+pin out float speedscale;
+pin out signed speedcounts;
+//pin out float joginc;
+//pin out signed jogspeed;
+
+license "GPL"; // indicates GPL v2 or later
+;;
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <wordexp.h>
+#include <unistd.h>
+
+
+//#define LOG(...) printf(__VA_ARGS__);
+#define LOG(...)
+#define BBB_SLOTS "/sys/devices/bone_capemgr.*/slots"
+#define BBB_HELPER "/sys/devices/ocp.*/helper.*"
+#define POLLTIME 1000000
+//#define JOGAIN 3
+#define SPEEDAIN 4
+//#define JOGINTERVAL 100 //ie 8 positions
+#define SPEEDINTERVAL 50 //ie 16 positions
+
+
+char *bbb_wildCardPath(char *path);
+//int bbb_enableADC();
+int bbb_getADC(int id); 
+//int jogctl(int potarval);
+int speedctl(int potarval);
+/*EXTRA_SETUP() { 
+bbb_enableADC();
+}
+*/
+void user_mainloop(void) {
+int i,val  ;
+
+LOG("before ADC POLL\n");
+    while(1) 
+		{
+
+        usleep(POLLTIME);
+        FOR_ALL_INSTS() 
+			{
+				
+        //jogctl(bbb_getADC(JOGAIN));
+        speedctl(bbb_getADC(SPEEDAIN));
+			
+			}
+		}
+    }
+
+
+//	Utils
+
+char *bbb_wildCardPath(char *path) {
+	size_t size = 0;
+	char *ptr = NULL;
+	static char ret[1024];
+	wordexp_t p;
+	struct stat st;
+
+	wordexp(path, &p, 0);
+
+	if (p.we_wordc > 0) {
+		size = strlen(*(p.we_wordv));
+
+		if (size < sizeof(ret) && stat(*(p.we_wordv), &st) == 0) {
+			memset(ret, 0, sizeof(ret));
+			memcpy(ret, *(p.we_wordv), size);
+			ptr = ret;
+		}
+	}
+
+	wordfree(&p);
+	return ptr;
+}
+
+//	ADC
+
+/*int bbb_enableADC() {
+	int fd = -1;
+	static int ret = -1;
+	char buffer[1024];
+	char *ptr = "cape-bone-iio";
+	int size = strlen(ptr);
+	char *wpath = NULL;
+
+	if ((wpath = bbb_wildCardPath(BBB_SLOTS)) != NULL) {
+		if ((fd = open(wpath, O_RDWR | O_APPEND)) < 0) {
+			return -1;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+			return -1;
+		}
+
+		if (strncmp(buffer, ptr, size) != 0) {
+			LOG("Enabling ADC\n");
+
+			if (write(fd, ptr, size) != size) {
+				return -1;
+			}
+		}
+
+		return 0;
+	}
+
+	return -1;
+}*/
+
+int bbb_getADC(int id) {
+	int fd = -1;
+	static int ret = -1;
+	char buffer[128];
+	char path[128];
+	char *wpath = NULL;
+
+	memset(path, 0, sizeof(path));
+	snprintf(path, sizeof(path), "%s/AIN%d", BBB_HELPER, id);
+
+	if ((wpath = bbb_wildCardPath(path)) != NULL) {
+		if ((fd = open(wpath, O_RDONLY)) < 0) {
+			return -1;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+			close(fd);
+			return -1;
+		}
+
+		ret = atoi(buffer);
+	}
+	close(fd);
+	return ret;
+}
+
+/*int jogctl(int potarval){
+	
+int cmd;
+LOG("JOG val : %i\n",potarval);
+cmd = potarval/JOGINTERVAL;
+LOG("JOG CMD : %i\n",cmd);
+joginc=0.02*cmd;
+return 0;
+}*/
+
+int speedctl(int potarval){
+int cmd;
+LOG("SPEED val : %i\n",potarval);
+cmd = potarval/SPEEDINTERVAL;
+LOG("SPEED CMD : %i\n",cmd);
+if (cmd >= 12){
+speedcounts=0.1*cmd*2;
+}
+else{speedcounts=0.1*cmd;}
+return 0;
+}

@@ -1,0 +1,690 @@
+component usrmod_init; //init the eqep, pwm gpio and AIN component
+pin in bit ilenfautune;
+option userspace;
+//option userinit;
+
+license "GPL"; // indicates GPL v2 or later
+;;
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <wordexp.h>
+#include <unistd.h>
+
+
+//#define LOG(...) printf(__VA_ARGS__);
+#define LOG(...)
+#define BBB_SLOTS "/sys/devices/bone_capemgr.*/slots"
+#define BBB_OCP2 "/sys/devices/ocp.*"
+#define BBB_HELPER "/sys/devices/ocp.*/helper.*"
+#define BBB_GPIOP "/sys/class/gpio"	
+
+#define PWMPERIOD 50000
+#define INITTIME 1
+#define PWMHEADER0 9
+#define PWMPINA0 22 //gpio 0-2
+#define PWMPINB0 21 //gpio 0-3
+#define PWMHEADER1 8
+#define PWMPINA1 36 //gpio 2-16
+#define PWMPINB1 34 //gpio 2-17
+#define PWMHEADER2 8
+#define PWMPINA2 19 //gpio 0-22
+#define PWMPINB2 13 //gpio 0-23
+#define PWMENABLEGPIO 49 //pin 9-23 gpio 1-17 ie index 49 (1*32 + 17)
+#define PWMENABLEGPIONAME "bspm_P9_23_7" //pin 9-23 gpio 1-17 ie index 49 (1*32 + 17)                            http://kilobaser.com/blog/2014-07-28-beaglebone-black-devicetreeoverlay-generator
+#define EXTRUSTEP 86 //pin 8-27 gpio 2-22 ie index 86 (2*32 + 22)
+#define EXTRUSTEPGPIONAME "bspm_P8_27_7"
+#define EXTRUDIR 88 //pin 8-28 gpio 2-24 ie index 88(2*32 + 24)
+#define EXTRUDIRGPIONAME "bspm_P8_28_7"
+
+#define FCXGPIO 15 //pin 9-24 gpio 0-15 ie index 15 (0*32 + 15)
+#define FCYGPIO 89 //pin 8-30 gpio 2-25 ie index 89 (2*32 + 25)
+#define FCZGPIO 14 //pin 9-26 gpio 0-14 ie index 14 (0*32 + 14)
+#define FCXGPIONAME "bspm_P9_24_37" //pin 9-24 gpio 0-15 ie index 15 (0*32 + 15)
+#define FCYGPIONAME "bspm_P8_30_37"//pin 8-30 gpio 2-25 ie index 89 (2*32 + 25)
+#define FCZGPIONAME "bspm_P9_26_37"//pin 9-26 gpio 0-14 ie index 14 (0*32 + 14)
+
+#define TOOLGPIO 87 //pin 8-29 gpio 2-23 ie index 88(2*32 + 23)
+#define TOOLGPIONAME "bspm_P8_29_37"
+
+
+char *bbb_wildCardPath(char *path);
+int bbb_enablePwm(int header, int pin);
+int bbb_setPwmPercent(int header, int pin, int duty);
+int bbb_setPwmPeriod(int header, int pin, int time);
+int bbb_setPwmDuty(int header, int pin, int time);
+int bbb_getPwmPeriod(int header, int pin);
+int bbb_enableEqep(int eqepChan);
+int bbb_resetEqep(int eqepChan);
+int bbb_enableGpio(int gpio, char *gpioname) ;
+int bbb_setGpioDirection(int gpio, int direction_pwm);
+int bbb_setGpioValue(int gpio, int value);
+int bbb_enableADC();
+int bbb_runPwm(int header, int pin,int act);
+
+void user_mainloop(void) {
+
+//#### init PWM ####
+
+printf("PWM init : start \n");
+
+(bbb_enablePwm(PWMHEADER0, PWMPINA0)<0)?printf("Failed to enable pwmA CAHN0 or already loaded \n"):printf("enable pwmA CAHN 0\n");
+(bbb_setPwmPeriod(PWMHEADER0, PWMPINA0, PWMPERIOD)<0)?printf ("Failed to set periode pwmA CAHN0\n"):printf ("set periode pwmA CAHN0\n");
+
+
+(bbb_enablePwm(PWMHEADER0, PWMPINB0)<0)?printf ("Failed to enable pwmB CAHN0 or already loaded\n"):printf ("enable pwmB CAHN 0\n");
+(bbb_setPwmPeriod(PWMHEADER0, PWMPINB0, PWMPERIOD)<0)?printf ("Failed to set periode pwmB CAHN0\n"):printf ("set periode pwmB CAHN0\n");
+
+
+(bbb_runPwm(PWMHEADER0, PWMPINA0,1)<0)?printf ("Failed to activate pwmA CAHN0\n"):printf ("activate pwmA CAHN 0\n");
+(bbb_runPwm(PWMHEADER0, PWMPINB0,1)<0)?printf ("Failed to activate pwmB CAHN0\n"):printf ("activate pwmB CAHN 0\n");
+
+
+
+(bbb_enablePwm(PWMHEADER1, PWMPINA1)<0)?printf("Failed to enable pwmA CAHN1 or already loaded \n"):printf("enable pwmA CAHN 1\n");
+(bbb_setPwmPeriod(PWMHEADER1, PWMPINA1, PWMPERIOD)<0)?printf ("Failed to set periode pwmA CAHN1\n"):printf ("set periode pwmA CAHN1\n");
+
+
+(bbb_enablePwm(PWMHEADER1, PWMPINB1)<0)?printf ("Failed to enable pwmB CAHN1 or already loaded\n"):printf ("enable pwmBCAHN 1\n");
+(bbb_setPwmPeriod(PWMHEADER1, PWMPINB1, PWMPERIOD)<0)?printf ("Failed to set periode pwmB CAHN1\n"):printf ("set periode pwmB CAHN1\n");
+
+
+(bbb_runPwm(PWMHEADER1, PWMPINA1,1)<0)?printf ("Failed to activate pwmA CAHN1\n"):printf ("activate pwmA CAHN 1\n");
+(bbb_runPwm(PWMHEADER1, PWMPINB1,1)<0)?printf ("Failed to activate pwmB CAHN1\n"):printf ("activate pwmB CAHN 1\n");
+
+
+
+
+(bbb_enablePwm(PWMHEADER2, PWMPINA2)<0)?printf("Failed to enable pwmA CAHN2 or already loaded \n"):printf("enable pwmA CAHN 2\n");
+(bbb_setPwmPeriod(PWMHEADER2, PWMPINA2, PWMPERIOD)<0)?printf ("Failed to set periode pwmA CAHN2\n"):printf ("set periode pwmA CAHN2\n");
+
+
+(bbb_enablePwm(PWMHEADER2, PWMPINB2)<0)?printf ("Failed to enable pwmB CAHN2 or already loaded\n"):printf ("enable pwmBCAHN 2\n");
+(bbb_setPwmPeriod(PWMHEADER2, PWMPINB2, PWMPERIOD)<0)?printf ("Failed to set periode pwmB CAHN2\n"):printf ("set periode pwmB CAHN2\n");
+
+
+(bbb_runPwm(PWMHEADER2, PWMPINA2,1)<0)?printf ("Failed to activate pwmA CAHN2\n"):printf ("activate pwmA CAHN 2\n");
+(bbb_runPwm(PWMHEADER2, PWMPINB2,1)<0)?printf ("Failed to activate pwmB CAHN2\n"):printf ("activate pwmB CAHN 2\n");
+
+
+(bbb_setPwmPercent(PWMHEADER0, PWMPINA0, 100)<0)?printf ("Failed to set percent pwmA CAHN0\n"):printf ("set percent pwmA CAHN0\n");
+(bbb_setPwmPercent(PWMHEADER0, PWMPINB0, 100)<0)?printf ("Failed to set percent pwmB CAHN0\n"):printf ("set percent pwmB CAHN0\n");
+(bbb_setPwmPercent(PWMHEADER1, PWMPINA1, 100)<0)?printf ("Failed to set percent pwmA CAHN1\n"):printf ("set percent pwmA CAHN1\n");
+(bbb_setPwmPercent(PWMHEADER1, PWMPINB1, 100)<0)?printf ("Failed to set percent pwmB CAHN1\n"):printf ("set percent pwmB CAHN1\n");
+(bbb_setPwmPercent(PWMHEADER2, PWMPINB2, 100)<0)?printf ("Failed to set percent pwmB CAHN2\n"):printf ("set percent pwmB CAHN2\n");
+(bbb_setPwmPercent(PWMHEADER2, PWMPINA2, 100)<0)?printf ("Failed to set percent pwmA CAHN2\n"):printf ("set percent pwmA CAHN2\n");
+printf("PWM init : stop \n");
+
+//#### init EQEP ####
+
+printf("EQEP init : start \n");
+
+(bbb_enableEqep(0)<0)?printf ("Failed to enable eqep CAHN0 or already loaded\n"):printf ("enable eqep CAHN0\n");
+(bbb_enableEqep(1)<0)?printf ("Failed to enable eqep CAHN1 or already loaded\n"):printf ("enable eqep CAHN1\n");
+(bbb_enableEqep(2)<0)?printf ("Failed to enable eqep CAHN2 or already loaded\n"):printf ("enable eqep CAHN2\n");
+
+(bbb_resetEqep(0)<0)?printf ("Failed to reset eqep CAHN0 \n"):printf ("reset eqep CAHN0\n");
+(bbb_resetEqep(1)<0)?printf ("Failed to reset eqep CAHN1 \n"):printf ("reset eqep CAHN1\n");
+(bbb_resetEqep(2)<0)?printf ("Failed to reset eqep CAHN2 \n"):printf ("reset eqep CAHN2\n");
+
+printf("EQEP init : stop \n");
+
+//#### init GPIO ####
+
+printf("GPIO init : start \n");
+
+(bbb_enableGpio(PWMENABLEGPIO,PWMENABLEGPIONAME)<0)?printf ("Failed to enable PWM_ENABLE_GPIO or already loaded\n"):printf ("enable PWM_ENABLE_GPIO\n");
+(bbb_setGpioDirection(PWMENABLEGPIO, 1)<0)?printf ("Failed to set DIRECTION PWM_ENABLE_GPIO \n"):printf ("set DIRECTION PWM_ENABLE_GPIO\n");
+(bbb_setGpioValue(PWMENABLEGPIO, 0)<0)?printf ("Failed to set VALUE PWM_ENABLE_GPIO \n"):printf ("set VALUE PWM_ENABLE_GPIO\n");
+
+(bbb_enableGpio(EXTRUSTEP,EXTRUSTEPGPIONAME)<0)?printf ("Failed to enable EXTRUSTEP or already loaded\n"):printf ("enable EXTRUSTEP\n");
+(bbb_setGpioDirection(EXTRUSTEP, 1)<0)?printf ("Failed to set DIRECTION EXTRUSTEP \n"):printf ("set DIRECTION EXTRUSTEP\n");
+(bbb_setGpioValue(EXTRUSTEP, 0)<0)?printf ("Failed to set VALUE EXTRUSTEP \n"):printf ("set VALUE EXTRUSTEP\n");
+
+(bbb_enableGpio(EXTRUDIR,EXTRUDIRGPIONAME)<0)?printf ("Failed to enable EXTRUDIR or already loaded\n"):printf ("enable EXTRUDIR\n");
+(bbb_setGpioDirection(EXTRUDIR, 1)<0)?printf ("Failed to set DIRECTION EXTRUDIR \n"):printf ("set DIRECTION EXTRUDIR\n");
+(bbb_setGpioValue(EXTRUDIR, 0)<0)?printf ("Failed to set VALUE EXTRUDIR \n"):printf ("set VALUE EXTRUDIR\n");
+
+
+(bbb_enableGpio(FCXGPIO,FCXGPIONAME)<0)?printf ("Failed to enable FCXGPIO or already loaded\n"):printf ("enable FCXGPIO\n");
+(bbb_setGpioDirection(FCXGPIO, 0)<0)?printf ("Failed to set DIRECTION FCXGPIO \n"):printf ("set DIRECTION FCXGPIO\n");
+
+(bbb_enableGpio(FCYGPIO,FCYGPIONAME)<0)?printf ("Failed to enable FCYGPIO or already loaded\n"):printf ("enable FCYGPIO\n");
+(bbb_setGpioDirection(FCYGPIO, 0)<0)?printf ("Failed to set DIRECTION FCYGPIO \n"):printf ("set DIRECTION FCYGPIO\n");
+
+(bbb_enableGpio(FCZGPIO,FCZGPIONAME)<0)?printf ("Failed to enable FCZGPIO or already loaded\n"):printf ("enable FCZGPIO\n");
+(bbb_setGpioDirection(FCZGPIO, 0)<0)?printf ("Failed to set DIRECTION FCZGPIO \n"):printf ("set DIRECTION FCZGPIO\n");
+
+(bbb_enableGpio(TOOLGPIO,TOOLGPIONAME)<0)?printf ("Failed to enable TOOLGPIO or already loaded\n"):printf ("enable TOOLGPIO\n");
+(bbb_setGpioDirection(TOOLGPIO, 0)<0)?printf ("Failed to set DIRECTION TOOLGPIO \n"):printf ("set DIRECTION TOOLGPIO\n");
+
+
+printf("GPIO init : stop \n");
+
+//#### init ADC ####
+
+printf("ADC init : start \n");
+
+(bbb_enableADC()<0)?printf ("Failed to enable ADC or already loaded\n"):printf ("enable ADC\n");
+
+printf("ADC init : stop \n");
+}
+
+//	Utils
+
+char *bbb_wildCardPath(char *path) {
+	size_t size = 0;
+	char *ptr = NULL;
+	static char ret[1024];
+	wordexp_t p;
+	struct stat st;
+
+	wordexp(path, &p, 0);
+
+	if (p.we_wordc > 0) {
+		size = strlen(*(p.we_wordv));
+
+		if (size < sizeof(ret) && stat(*(p.we_wordv), &st) == 0) {
+			memset(ret, 0, sizeof(ret));
+			memcpy(ret, *(p.we_wordv), size);
+			ptr = ret;
+		}
+	}
+
+	wordfree(&p);
+	return ptr;
+}
+
+
+//	PWM
+int bbb_setPwmPercent(int header, int pin, int duty) {
+	int time = bbb_getPwmPeriod(header, pin);
+
+	if (header > 0 && pin > 0 && duty >= 0 && duty <= 100) {
+		return bbb_setPwmDuty(header, pin, ((time / 100) * duty));
+	}
+
+	return -1;
+}
+int bbb_enablePwm(int header, int pin) {
+	int fd = -1;
+	int ret = -1;
+	char buffer[4096];
+	char ptr[128];
+	char *pwm = "am33xx_pwm";
+	int size = strlen(pwm);
+	char *wpath = NULL;
+
+	if ((wpath = bbb_wildCardPath(BBB_SLOTS)) != NULL) {
+		if ((fd = open(wpath, O_RDWR | O_APPEND)) < 0) {
+			return -1;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+			close(fd);
+			return -1;
+		}
+
+		if (strstr (buffer, pwm) == NULL) {
+			LOG("Enabling PWM\n");
+
+			if (write(fd, pwm, size) != size) {
+				close(fd);
+				return -1;
+			}
+		}
+
+		memset(ptr, 0, sizeof(ptr));
+		ret = snprintf(ptr, sizeof(ptr), "sc_pwm_P%d_%d", header, pin);
+
+		if (strstr(buffer, ptr) == NULL) {
+			LOG("Enabling PWM P%d_%d\n", header, pin);
+
+			if (write(fd, ptr, ret) != ret) {
+				close(fd);
+				return -1;
+			}
+			sleep(INITTIME);
+		}
+
+		close(fd);
+		
+		return 0;
+	}
+
+	return -1;
+}
+
+int bbb_runPwm(int header, int pin,int act) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (header > 0 && pin > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/pwm_test_P%d_%d.*/run", BBB_OCP2, header, pin);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+                        if ((fd = open(wpath, O_WRONLY)) < 0) {
+							LOG("echec ouverture fichier \n ");
+                                return -1;
+                        }
+
+			if (bbb_setPwmDuty(header, pin, 0) < 0) {
+				close(fd);
+				LOG("echec setpwmduty à 0 \n");
+				return -1;
+			}
+			
+			memset(ptr, 0, sizeof(ptr));
+			ret = snprintf(ptr, sizeof(ptr), "%d",act );
+
+			if (write(fd, ptr, ret) < 0) {
+				LOG("echec ecriture periode \n");
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+
+int bbb_setPwmPeriod(int header, int pin, int time) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (header > 0 && pin > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/pwm_test_P%d_%d.*/period", BBB_OCP2, header, pin);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+                        if ((fd = open(wpath, O_WRONLY)) < 0) {
+							LOG("echec ouverture fichier \n ");
+                                return -1;
+                        }
+
+		/*	if (bbb_setPwmDuty(header, pin, 0) < 0) {
+				close(fd);
+				LOG("echec setpwmduty à 0 \n");
+				return -1;
+			}
+			if (bbb_runPwm(header, pin,0) < 0) {
+				close(fd);
+				LOG("echec setperiod deact \n");
+				return -1;
+			}*/
+//sleep(INITTIME);
+			memset(ptr, 0, sizeof(ptr));			
+			ret = snprintf(ptr, sizeof(ptr), "%d", time);
+			
+			if (write(fd, ptr, ret) < 0) {
+				LOG("echec ecriture periode \n");
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+			close(fd);
+			/*if (bbb_runPwm(header, pin,1) < 0) {
+				close(fd);
+				LOG("echec setperiod act \n");
+				return -1;
+			}*/
+		}
+	}
+
+	return ret;
+}
+
+int bbb_setPwmDuty(int header, int pin, int time) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (header > 0 && pin > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/pwm_test_P%d_%d.*/duty", BBB_OCP2, header, pin);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_WRONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+			ret = snprintf(ptr, sizeof(ptr), "%d", time);
+
+			if (write(fd, ptr, ret) < 0) {
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+int bbb_getPwmPeriod(int header, int pin) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (header > 0 && pin > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/pwm_test_P%d_%d.*/period", BBB_OCP2, header, pin);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_RDONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+
+			if (read(fd, ptr, sizeof(ptr)) <= 0) {
+				ret = -1;
+			} else {
+				ret = atoi(ptr);
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+// EQEP
+
+
+int bbb_enableEqep(int eqepChan) {
+	int fd = -1;
+	int ret = -1;
+	char buffer[4096];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if ((wpath = bbb_wildCardPath(BBB_SLOTS)) != NULL) {
+		if ((fd = open(wpath, O_RDWR | O_APPEND)) < 0) {
+			return -1;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+			close(fd);
+			return -1;
+		}
+
+
+		memset(ptr, 0, sizeof(ptr));
+		ret = snprintf(ptr, sizeof(ptr), "bone_eqep%d", eqepChan);
+LOG("buffer %s\n",buffer);
+LOG("ptr %s\n",ptr);
+LOG("ret %i\n",ret);
+
+		if (strstr(buffer, ptr)==NULL) {
+			LOG("Enabling eqep %d\n",eqepChan);
+
+			if (write(fd, ptr, ret) != ret) {
+				close(fd);
+				return -1;
+			}
+			sleep(INITTIME);
+		} else {close(fd);return -1;}
+
+		close(fd);
+		
+		return 0;
+	}
+
+	return -1;
+}
+int bbb_resetEqep(int eqepChan) {
+	int fd = -1;
+	int ret = -1;
+	int intiVal = 0;
+	char path[128];
+	char buffer[4096];
+	char ptr[128];
+	char *pwmssAddr;
+	char *eqepAddr;
+	char *wpath = NULL;
+	
+	switch (eqepChan){
+	case 0 :
+		pwmssAddr="48300000";
+		eqepAddr="48300180";
+		break;
+	case 1 :
+		pwmssAddr="48302000";
+		eqepAddr= "48302180";
+		break;		
+	case 2 :
+		pwmssAddr="48304000";
+		eqepAddr="48304180";
+		break;
+			}
+
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/%s.epwmss/%s.eqep/position", BBB_OCP2, pwmssAddr, eqepAddr);
+LOG("eqep path value %s \n",path);
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_WRONLY)) < 0) {
+				LOG("failed to open %s \n",path);
+				return -1;
+			}
+			LOG("%s open  \n",path);
+
+			memset(ptr, 0, sizeof(ptr));
+
+			ret = snprintf(ptr, sizeof(ptr), "%d", intiVal);
+			LOG("write %s, ret %i \n",ptr,ret);
+			if (write(fd, ptr, ret) < 0) {
+				LOG("failed to write %s, ret %s \n",ptr,ret);
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		
+	}
+
+	return ret;
+}
+
+//	GPIO
+
+int bbb_enableGpio(int gpio,char *gpioname) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+	int size = strlen(gpioname);
+	char buffer[4096];
+	
+	if (gpio > 0) {
+
+	if ((wpath = bbb_wildCardPath(BBB_SLOTS)) != NULL) {
+		if ((fd = open(wpath, O_RDWR | O_APPEND)) < 0) {
+			return -1;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+			close(fd);
+			return -1;
+		}
+
+		if (strstr (buffer, gpioname) == NULL) {
+			LOG("Enabling gpio devicetree\n");
+
+			if (write(fd, gpioname, size) != size) {
+				close(fd);
+				return -1;
+			}
+		}
+}
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/gpio%d", BBB_GPIOP, gpio);
+//rtapi_print("path gpio : %s.",path);
+		if ((wpath = bbb_wildCardPath(path)) == NULL) {
+			memset(path, 0, sizeof(path));
+			snprintf(path, sizeof(path), "%s/export", BBB_GPIOP);
+			//rtapi_print("path 2 gpio : %s.",path);
+
+			if ((wpath = bbb_wildCardPath(path)) != NULL) {
+				if ((fd = open(wpath, O_WRONLY)) < 0) {
+					return -1;
+				}
+
+				//rtapi_print("Enabling GPIO(%d)\n", gpio);
+
+				memset(ptr, 0, sizeof(ptr));
+				ret = snprintf(ptr, sizeof(ptr), "%d", gpio);
+
+				if (write(fd, ptr, ret) < 0) {
+					ret = -1;
+				} else {
+					ret = 0;
+				}
+
+				close(fd);
+				sleep(INITTIME);
+			}
+		} else {
+			return 0;
+		}
+	}
+
+	return ret;
+}
+
+int bbb_setGpioDirection(int gpio, int direction_pwm) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char *ptr = "IN";
+	char *wpath = NULL;
+
+	if (gpio > 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/gpio%d/direction", BBB_GPIOP, gpio);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_WRONLY)) < 0) {
+				return -1;
+			}
+
+			if (direction_pwm > 0) {
+				ret = 3;
+				ptr = "out";
+			} else {
+				ret = 2;
+				ptr = "in";
+			}
+
+			if (write(fd, ptr, ret) < 0) {
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+int bbb_setGpioValue(int gpio, int value) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
+
+	if (gpio > 0 && value >= 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/gpio%d/value", BBB_GPIOP, gpio);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_WRONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+			ret = snprintf(ptr, sizeof(ptr), "%d", (value > 0) ? 1 : 0);
+
+			if (write(fd, ptr, ret) < 0) {
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
+
+//	ADC
+
+int bbb_enableADC() {
+	int fd = -1;
+	static int ret = -1;
+	char buffer[1024];
+	char *ptr = "cape-bone-iio";
+	int size = strlen(ptr);
+	char *wpath = NULL;
+
+	if ((wpath = bbb_wildCardPath(BBB_SLOTS)) != NULL) {
+		if ((fd = open(wpath, O_RDWR | O_APPEND)) < 0) {
+			return -1;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+			close(fd);
+			return -1;
+		}
+
+		if (strstr(buffer, ptr)==NULL) {
+			LOG("Enabling ADC\n");
+
+			if (write(fd, ptr, size) != size) {
+				close(fd);
+				return -1;
+			}
+			sleep(INITTIME);
+		}
+		close(fd);
+		
+		return 0;
+	}
+
+	return -1;
+}

@@ -1,0 +1,7 @@
+dtc -O dtb -o /lib/firmware/bone_eqep0-00A0.dtbo -b 0 -@ bone_eqep0.dts
+dtc -O dtb -o /lib/firmware/bone_eqep1-00A0.dtbo -b 0 -@ bone_eqep1.dts
+dtc -O dtb -o /lib/firmware/bone_eqep2-00A0.dtbo -b 0 -@ bone_eqep2.dts
+
+dtc -O dtb -o /lib/firmware/bspm_P8_29_37-00A0.dtbo -b 0 -@ bspm_P8_29_37-00A0.dts
+dtc -O dtb -o /lib/firmware/bspm_P8_28_7-00A0.dtbo -b 0 -@ bspm_P8_28_7-00A0.dts
+dtc -O dtb -o /lib/firmware/bspm_P8_27_7-00A0.dtbo -b 0 -@ bspm_P8_27_7-00A0.dts

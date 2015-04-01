@@ -1,0 +1,342 @@
+component usrmod_jog_int;
+// ne pas oublier de gerer la vitesse de jog 
+
+
+option userspace;
+
+pin out bit xjogup;
+pin out bit yjogup;
+pin out bit zjogup;
+pin out bit xjogdown;
+pin out bit yjogdown;
+pin out bit zjogdown;
+pin out bit xjogincup;
+pin out bit yjogincup;
+pin out bit zjogincup;
+pin out bit xjogincdown;
+pin out bit yjogincdown;
+pin out bit zjogincdown;
+pin out float joginc=0;
+pin out float jogspeed = 500; // à affiner . peuetre à gerer via les info du init dnas le hal
+
+license "GPL"; // indicates GPL v2 or later
+;;
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <wordexp.h>
+#include <unistd.h>
+#include <sys/select.h>
+
+#define LOG(...) printf(__VA_ARGS__);
+//#define LOG(...)
+#define BBB_SLOTS "/sys/devices/bone_capemgr.*/slots"
+#define BBB_HELPER "/sys/devices/ocp.*/helper.*"
+#define BBB_TRIG_ADC "/sys/bus/iio/devices/trigger"
+#define VALUP 1150
+#define VALDOWN 650
+#define JOGAIN 3
+#define JOGINTERVAL 225 //ie 8 positions (potar de 0 à 1800)
+#define PULSETIME 20000
+#define POLLTIME 250000
+#define NUMAXIS 3
+
+char *bbb_wildCardPath(char *path);
+//int bbb_enableADC();
+int bbb_getADCfd(int fd);
+int bbb_openADC(int id) ;
+int bbb_getADC(int id); 
+int jogup (int axis);
+int jogdown (int axis);
+int jogstop(int axis);
+int jogincup (int axis);
+int jogincdown (int axis);
+int jogincstop(int axis);
+int jogctl(int potarval);
+
+
+void user_mainloop(void) {
+int i,val;
+int fd[NUMAXIS];
+fd_set fdaxis;
+
+FD_ZERO(& fdaxis);
+
+for (i=0;i<NUMAXIS;i++)
+				{
+    // Ouvrir le fichier
+    if ((fd[i] = bbb_openADC(i)) < 0) {
+        exit(EXIT_FAILURE);
+    }
+ FD_SET(fd[i], & fdaxis);  
+ LOG("i %i fdi %i\n",i,fd[i]); 
+    }
+
+   
+    while(1) {
+		FOR_ALL_INSTS() {
+		LOG("jogctl\n");
+		jogctl(bbb_getADC(JOGAIN));
+		//LOG("joginc %f\n",joginc);
+     // Attente passive (pas de timeout, donc infinie...
+       // if (select(fd[NUMAXIS]+1, NULL, NULL, & fdaxis, NULL) < 0) {
+       //LOG("first arg %i fdL %i\n",NUMAXIS,fd[NUMAXIS-1]);
+       if (select(fd[NUMAXIS-1], NULL, NULL, & fdaxis, NULL) < 0) {
+        //    perror("select");
+             LOG("erro select\n");
+            break;
+        }
+       
+		if (joginc==0){
+			 LOG("after select joginc %f\n",joginc);
+			for (i=0;i<NUMAXIS;i++)
+				{
+					if  (FD_ISSET(fd[i], & fdaxis)){
+				val=bbb_getADCfd(fd[i]);
+				
+				 if ( val > VALUP) {LOG("UP %i VAL %i\n",i,val);jogup(i);}
+				 else if ( val < VALDOWN) {LOG("DOWN %i VAL %i\n",i,val);jogdown(i);}
+						else jogstop(i);
+				}
+			}
+			}else
+				{
+					for (i=0;i<NUMAXIS;i++)
+				{
+				val=bbb_getADCfd(fd[i]);
+				 if ( val > VALUP) {LOG("UP inc %i VAL %i\n",i,val);jogincup(i); usleep(PULSETIME);jogincstop(i);}
+				 else if 
+					( val < VALDOWN) {LOG("DOWN inc %i VAL %i\n",i,val);jogincdown(i);usleep(PULSETIME);jogincstop(i);}
+				}
+				}
+			}
+		}
+    for (i=0;i<NUMAXIS;i++)
+				{
+    // fermer le fichier
+   close(fd[i]);
+     
+    }
+}
+
+//	Utils
+
+char *bbb_wildCardPath(char *path) {
+	size_t size = 0;
+	char *ptr = NULL;
+	static char ret[1024];
+	wordexp_t p;
+	struct stat st;
+
+	wordexp(path, &p, 0);
+
+	if (p.we_wordc > 0) {
+		size = strlen(*(p.we_wordv));
+
+		if (size < sizeof(ret) && stat(*(p.we_wordv), &st) == 0) {
+			memset(ret, 0, sizeof(ret));
+			memcpy(ret, *(p.we_wordv), size);
+			ptr = ret;
+		}
+	}
+
+	wordfree(&p);
+	return ptr;
+}
+
+//	ADC
+
+/*int bbb_enableADC() {
+	int fd = -1;
+	static int ret = -1;
+	char buffer[1024];
+	char *ptr = "cape-bone-iio";
+	int size = strlen(ptr);
+	char *wpath = NULL;
+
+	if ((wpath = bbb_wildCardPath(BBB_SLOTS)) != NULL) {
+		if ((fd = open(wpath, O_RDWR | O_APPEND)) < 0) {
+			return -1;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+			return -1;
+		}
+
+		if (strncmp(buffer, ptr, size) != 0) {
+			LOG("Enabling ADC\n");
+
+			if (write(fd, ptr, size) != size) {
+				return -1;
+			}
+		}
+
+		return 0;
+	}
+
+	return -1;
+}*/
+
+
+int bbb_openADC(int id) {
+	int fd = -1;
+	static int ret = -1;
+	char buffer[128];
+	char path[128];
+	char *wpath = NULL;
+
+	memset(path, 0, sizeof(path));
+	snprintf(path, sizeof(path), "%s/trigger%d/trigger_now", BBB_TRIG_ADC, id);
+
+	if ((wpath = bbb_wildCardPath(path)) != NULL) {
+		if ((fd = open(wpath, O_RDONLY)) < 0) {
+			LOG("open error\n");
+			return -1;
+		}
+
+	return fd;
+}
+}
+int bbb_getADCfd(int fd) {
+	
+	static int ret = -1;
+	char buffer[128];
+
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+//			close(fd);
+			return -1;
+		}
+
+		ret = atoi(buffer);
+	
+//	close(fd);
+	return ret;
+}
+
+int bbb_getADC(int id) {
+	int fd = -1;
+	static int ret = -1;
+	char buffer[128];
+	char path[128];
+	char *wpath = NULL;
+LOG("start ADC get \n");
+	memset(path, 0, sizeof(path));
+	snprintf(path, sizeof(path), "%s/AIN%d", BBB_HELPER, id);
+
+	if ((wpath = bbb_wildCardPath(path)) != NULL) {
+		if ((fd = open(wpath, O_RDONLY)) < 0) {
+			return -1;
+		}
+
+		memset(buffer, 0, sizeof(buffer));
+
+		if ((ret = read(fd, buffer, sizeof(buffer))) < 0) {
+			close(fd);
+			return -1;
+		}
+
+		ret = atoi(buffer);
+	}
+	close(fd);
+	LOG("stop ADC get \n");
+	return ret;
+}
+
+int jogup (int axis)
+	{
+		//LOG("UP\n");
+	switch (axis)
+		{
+		case 0 : LOG("UP 0\n");xjogup=0b1;break;
+		case 1 : LOG("UP 1\n");yjogup=0b1;break;
+		case 2 :LOG("UP 2\n"); zjogup=0b1;break;
+		default : LOG("UP default\n"); break;
+		}
+		return 0;
+	}
+	
+int jogdown (int axis)
+	{
+
+	switch (axis)
+		{
+		case 0 : LOG("DOWN 0\n");xjogdown=0b1;break;
+		case 1 : LOG("DOWN 1\n");yjogdown=0b1;break;
+		case 2 : LOG("DOWN 2\n");zjogdown=0b1;break; 
+		default : LOG("DOWN default\n"); break;
+		}
+		return 0;
+	}
+	
+int jogstop(int axis)
+	{
+		LOG("stop\n");
+	switch (axis)
+		{
+		case 0 : xjogup=0b0;xjogdown=0b0;break;
+		case 1 : yjogup=0b0;yjogdown=0b0;break;
+		case 2 : zjogup=0b0;zjogdown=0b0;break; 
+		default : LOG("stop default\n"); break;
+		}
+		return 0;
+	}
+
+int jogincup (int axis)
+	{
+		//LOG("UP\n");
+	switch (axis)
+		{
+		case 0 : LOG("UP inc 0\n");xjogincup=0b1;break;
+		case 1 : LOG("UP inc 1\n");yjogincup=0b1;break;
+		case 2 :LOG("UP inc 2\n"); zjogincup=0b1;break;
+		default : LOG("UP inc default\n"); break;
+		}
+		return 0;
+	}
+	
+int jogincdown (int axis)
+	{
+
+	switch (axis)
+		{
+		case 0 : LOG("DOWN inc 0\n");xjogincdown=0b1;break;
+		case 1 : LOG("DOWN inc 1\n");yjogincdown=0b1;break;
+		case 2 : LOG("DOWN inc 2\n");zjogincdown=0b1;break; 
+		default : LOG("DOWN inc default\n"); break;
+		}
+		return 0;
+	}
+	
+int jogincstop(int axis)
+	{
+		LOG("incstop\n");
+	switch (axis)
+		{
+		case 0 : xjogincup=0b0;xjogincdown=0b0;break;
+		case 1 : yjogincup=0b0;yjogincdown=0b0;break;
+		case 2 : zjogincup=0b0;zjogincdown=0b0;break; 
+		default : LOG("stop inc default\n"); break;
+		}
+		return 0;
+	}
+
+int jogctl(int potarval){
+	
+int cmd;
+float jogincval[8]={0,0.005,0.01,0.1,0.5,1,10,100};
+LOG("JOG val : %i\n",potarval);
+cmd = potarval/JOGINTERVAL;
+//LOG("JOG CMD : %i joginc %f \n",cmd,jogincval[cmd]);
+joginc=jogincval[cmd];
+LOG("joginc: %f\n",joginc);
+//LOG("JOG CMD : %i joginc %f \n",cmd,jogincval[cmd]);
+return 0;
+}

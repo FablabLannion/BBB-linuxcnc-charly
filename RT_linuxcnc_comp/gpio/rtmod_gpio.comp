@@ -1,19 +1,22 @@
-component rtmod_pwm "permit to use pwm from TI chip with linuxCNC";
-pin in float pwm_percent if personality;
-variable int pinHeaderA;
-variable int pinNumA;
-variable int pinHeaderB;
-variable int pinNumB;
-variable char pwmPathA[128];
-variable char pwmPathB[128];
-variable char *pwmA;
-variable char *pwmB;
-variable int pwmPeriod;
-variable int pwmPeriodB;
-variable int fdpwmA;
-variable int fdpwmB;
-variable float prev_pwm_percent=0;
-function pwmset;
+component rtmod_gpio "permit to enable power on  pwm driver and endstop, tool length ";
+
+pin in bit enable_pwm = 0;
+pin out bit fcx = 0;
+pin out bit fcy = 0;
+pin out bit fcz = 0;
+pin out bit tool = 0;
+variable int pwmGpioEn;
+variable char GPIOPath[128];
+variable char *GPIOpin;
+variable char *GPIOfcx;
+variable char *GPIOfcy;
+variable char *GPIOfcz;
+variable char *GPIOtool;
+variable char *GPIOname[10];
+variable int fdgpio[10];
+variable int prevEna;
+variable int valtowrite[32];
+function powerctl;
 license "GPL"; // indicates GPL v2 or later
 author "Theo";
 option extra_setup;
@@ -28,138 +31,170 @@ option extra_setup;
 #include <errno.h>
 #include <wordexp.h>
 #include <unistd.h>
-#include <math.h>
 #include "bbb.h"
-#define BBB_SLOTS "/sys/devices/bone_capemgr.*/slots"
-
+//#define BBB_SLOTS "/sys/devices/bone_capemgr.*/slots"
+#define BBB_GPIO_EXPORT "/sys/class/gpio/export"
+#define NUMGPIO 5
+#define NUMGPIOIN 4 //fc x y z , tool length,
+#define NUMGPIOOUT 1 
 
 EXTRA_SETUP() { 
+int i;
+/*char path1[128],path2[128],path3[128];
+	if(!count) count = 1;
+	if(count) 
+		{*/
+			rtapi_print ("enter extrasetup powerctl inst");
+			GPIOpin="rtgpio0";//pwr-ctl
+			//GPIOstep="rtgpio1";//extruder step
+			//GPIOdir="rtgpio2";//extruder dir
+			GPIOfcx="rtgpio3";//fc-x
+			GPIOfcy="rtgpio4";//fc-y
+			GPIOfcz="rtgpio5";//fc-z
+			GPIOfcz="rtgpio6";//tool length
+			GPIOname[0]="rtgpio0";//pwr-ctl
+			//GPIOname[1]="rtgpio1";//extruder step
+			//GPIOname[2]="rtgpio2";//extruder dir
+			GPIOname[1]="rtgpio3";//fc-x
+			GPIOname[2]="rtgpio4";//fc-y
+			GPIOname[3]="rtgpio5";//fc-z
+			GPIOname[4]="rtgpio6";//tool length
 
-char path1[128],path2[128],path3[128];
-if(!count) count = 1;
-if(count) {
-		rtapi_print ("enter extrasetup pwm inst %i",personality);
-	switch (personality-1)
-		{ 
-		case 0 :
-			pinHeaderA = 9;
-			pinHeaderB = 9;
-			pinNumA=22;
-			pinNumB=21;
-			pwmA="rtpwm0";
-			pwmB="rtpwm1";
-			break;
-		case 1 :
-			pinHeaderA = 8;
-			pinHeaderB = 8;
-			pinNumA=36;
-			pinNumB=34;
-			pwmA="rtpwm2";
-			pwmB="rtpwm3";
+	for (i=0;i<NUMGPIO;i++){
+fdgpio[i]=rt_dev_open(GPIOname[i], 0);
+}
 			
-			break;
-		case 2 :
-			pinHeaderA = 8;
-			pinHeaderB = 8;
-			pinNumA=45;
-			pinNumB=46;
-			pwmA="rtpwm4";
-			pwmB="rtpwm5";
-			break;
+/*for (i=0;i<NUMGPIO;i++){
+		
+		//memset(GPIOname[i], 0, sizeof(GPIOname[i]));
+		rtapi_print ("boucle start i %i",i);
+		GPIOname[i]="0000000000";
+		rtapi_print ("boucle int i %i",i);
+		snprintf(GPIOname[i], sizeof(GPIOname[i]), "rtgpio%d", i);
+	rtapi_print ("boucle stop i %i",i);
+}			*/
+			
+			/*pwmGpioEn=bbb_getGpio(bbb_getIndexByStr("P9_23")); //(GPIO 1-17)	
+			//pwmGpioEn=bbb_getGpio(bbb_getIndexByStr("P8_37")); //(GPIO 2-14)	
+			//pwmGpioEn=bbb_getGpio(bbb_getIndexByStr("P9_44")); //(GPIO 2-9)	
 		};
 	
-fdpwmA=rt_dev_open(pwmA, 0);
-fdpwmB=rt_dev_open(pwmB, 0);
-/*(bbb_enablePwm(pinHeaderA, pinNumA)<0)?rtapi_print ("unable do enable pwmA"):rtapi_print ("enable pwmA");
-(bbb_setPwmPeriod(pinHeaderA, pinNumA, 50000)<0)?rtapi_print ("unable set periode pwmA"):rtapi_print ("set periode pwmA");*/
-pwmPeriod=(bbb_getPwmPeriod(pinHeaderA, pinNumA))/10;
-rtapi_print("periode : %i ",pwmPeriod);
-/*(bbb_setPwmPercent(pinHeaderA, pinNumA, 100)<0)?rtapi_print ("unable to reset percent pwmA"):rtapi_print ("reset percent pwmA");
-(bbb_enablePwm(pinHeaderB, pinNumB)<0)?rtapi_print ("unable do enable pwmB"):rtapi_print ("enable pwmB");
-(bbb_setPwmPercent(pinHeaderB, pinNumB, 100)<0)?rtapi_print ("unable to reset percent pwmB"):rtapi_print ("reset percent pwmB");*/
+(bbb_enableGpio(pwmGpioEn)<0)?rtapi_print ("unable to load GPIO %c",pwmGpioEn):rtapi_print ("load GPIO %c",pwmGpioEn);
+(bbb_setGpioDirection(pwmGpioEn, 1)<0)?rtapi_print ("unable to set output GPIO %c",pwmGpioEn):rtapi_print ("set output GPIO %c",pwmGpioEn);
+(bbb_setGpioValue(pwmGpioEn, 0)<0)?rtapi_print ("unable to set GPIO %c",pwmGpioEn):rtapi_print ("set GPIO %c",pwmGpioEn);
+*/
 rtapi_print ("fin extrasetup pwm");
-
 
 return 0; 
 }
-}
-
 /*EXTRA_CLEANUP(){
-rtapi_print ("close pwm");
-rt_dev_close(fdpwmA);	
-rt_dev_close(fdpwmB);
-return ;
+	int i;
+	rtapi_print("close gpio");
+
+
+	for (i=0;i<NUMGPIO;i++){
+rt_dev_close(fdgpio[i]);}
+return 0;
 
 }*/
 
-FUNCTION(pwmset) {
-int rc,devPwmA,devPwmB;
-unsigned short  pwmShortPeriodFree;
-pwmShortPeriodFree=0x0000;
+FUNCTION(powerctl) {
+int i,rc,devGPIO,ret,valGPIO;
+//int fdGPIO[NUMGPIO];
+static unsigned long GPIOnumtab[NUMGPIOIN]={15,25,14,23};//  0-15(P9-24), 2-25(P8-30), 0-14(P9-26)
 
 
-if (fabs(prev_pwm_percent - pwm_percent) > 0.001)
+if (prevEna!=enable_pwm)
 	{
-		prev_pwm_percent = pwm_percent;
-		//rtapi_print("pwm_percent : %f ",pwm_percent);
-		//rtapi_print("prev_pwm_percent : %f ",prev_pwm_percent);
-		//devPwmA=rt_dev_open(pwmA, 0);
-		//rtapi_print("devices pwmA ouvert");
-//		devPwmB=rt_dev_open(pwmB, 0);
-		//rtapi_print("devices pwmB ouvert");
-
-		if(pwm_percent<0)
+	prevEna=enable_pwm;
+	
+	//devGPIO=rt_dev_open(GPIOpin, 0);
+	//devGPIO=rt_dev_open(GPIOname[0], 0);
+	//rc=rt_dev_write(devGPIO,&prevEna,1);
+	rc=rt_dev_write(fdgpio[0],&prevEna,1);
+		if (rc < 0) 
 			{
-			//	rtapi_print("pwm sens negatif");
-				//bbb_setPwmPercent(pinHeaderA, pinNumA, 100,pwmPathA,pwmPeriodA);
-				rc=rt_dev_write(fdpwmA,(const void *)&pwmPeriod,2);
-				if (rc < 1) 
-					{
-						rtapi_print("write pwma device failed : %i",rc);
-						rt_dev_close(fdpwmA);	
-						rt_dev_close(fdpwmB);
-						return ;
-					}
-				//rtapi_print("pwma write :%i - ret :%i",pwmPeriod,rc);
-				pwmShortPeriodFree=pwmPeriod*(1.+pwm_percent);
-				
-				rc=rt_dev_write(fdpwmB,(const void *)&pwmShortPeriodFree,2);
-				if (rc < 1) 
-					{ 
-						rtapi_print("write pwmB device failed : %i",rc);
-						rt_dev_close(fdpwmA);	
-						rt_dev_close(fdpwmB);	
-						return ;
-					}
-				//rtapi_print("pwmb write :%i - ret :%i",pwmShortPeriodFree,rc);
+				rtapi_print("write gpio device failed : %i",rc);
+				rt_dev_close(fdgpio[0]); 
+				return ;
 			}
-			else
-				{
-					//rtapi_print("pwm sens positif");
-					rc=rt_dev_write(fdpwmB,(const void *)&pwmPeriod,2);
-					if (rc < 1) 
-						{
-							rtapi_print("write pwmb device failed : %i",rc);
-							rt_dev_close(fdpwmA);	
-							rt_dev_close(fdpwmB);
-							return ;
-						}
-					//rtapi_print("pwmb write :%i - ret :%i",pwmPeriod,rc);
-					pwmShortPeriodFree=pwmPeriod*(1-pwm_percent);
-					rc=rt_dev_write(fdpwmA,(const void *)&pwmShortPeriodFree,2);
-					if (rc < 1) 
-						{
-							rtapi_print("write pwm A device failed : %i",rc);
-							rt_dev_close(fdpwmA);	
-							rt_dev_close(fdpwmB);
-							return ;
-						}
-					//rtapi_print("pwma write :%i - ret :%i",pwmShortPeriodFree,rc);
-				}
-	//	rt_dev_close(devPwmA);	
-	//	rt_dev_close(devPwmB);	
+	//rt_dev_close(devGPIO);	
+	
+}
+/*   partie pour extruder
+ valtowrite[1]=extrustep;
+valtowrite[2]=extrudir;
+
+for (i=1;i<NUMGPIOOUT;i++){
+devGPIO=rt_dev_open(GPIOname[i], 0);
+	
+	rc=rt_dev_write(devGPIO,valtowrite[i],1);
+		if (rc < 0) 
+			{
+				rtapi_print("write gpio device failed : %i",rc);
+				rt_dev_close(devGPIO); 
+				return ;
+			}
+	rt_dev_close(devGPIO);	
+}
+*/
+
+for (i=NUMGPIOOUT;i<NUMGPIO;i++){
+
+	//devGPIO=rt_dev_open(GPIOname[i], 0);
+//	devGPIO=rt_dev_open(GPIOfcx, 0);
+//	rtapi_print("read gpio fc  : %i",i);
+	//rc=rt_dev_read(devGPIO,&valGPIO,4);
+	rc=rt_dev_read(fdgpio[i],&valGPIO,4);
+	if (rc < 0) 
+			{
+				rtapi_print("read gpio device %i failed : %i",i,rc);
+				rt_dev_close(fdgpio[i]); 
+				return ;
+			}
+	//rt_dev_close(devGPIO);
+	switch (i) {
+		case NUMGPIOOUT :
+		fcx= valGPIO >> GPIOnumtab[0] & 1 ;
+		break;
+		case NUMGPIOOUT+1 :
+		fcy= valGPIO >> GPIOnumtab[1] & 1 ;
+		break;
+		case NUMGPIOOUT+2 :
+		fcz= valGPIO >> GPIOnumtab[2] & 1 ;
+		break;
+		case NUMGPIOOUT+3 :
+		tool= valGPIO >> GPIOnumtab[3] & 1 ;
+		break;
 		
 	}
+}	
+	//fcx= valGPIO >> GPIOnumtab[0] & 1 ;
+	
+	/*devGPIO=rt_dev_open(GPIOfcy, 0);
+	//rtapi_print("read gpio fc  : %i",i);
+	rc=rt_dev_read(devGPIO,&valGPIO,4);
+	if (rc < 0) 
+			{
+				rtapi_print("read gpio device failed : %i",rc);
+				rt_dev_close(devGPIO); 
+				return ;
+			}
+	rt_dev_close(devGPIO);	
+	fcy= valGPIO >> GPIOnumtab[2] & 1 ;
+		devGPIO=rt_dev_open(GPIOfcz, 0);
+	//rtapi_print("read gpio fc  : %i",i);
+	rc=rt_dev_read(devGPIO,&valGPIO,4);
+	if (rc < 0) 
+			{
+				rtapi_print("read gpio device failed : %i",rc);
+				rt_dev_close(devGPIO); 
+				return ;
+			}
+	rt_dev_close(devGPIO);
+	fcz= valGPIO >> GPIOnumtab[3] & 1 ;*/
+//}
+
 return ;
 }
 
@@ -579,7 +614,37 @@ int bbb_getGpioDirection(int gpio) {
 	return ret;
 }
 
+int bbb_setGpioValue(int gpio, int value) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
 
+	if (gpio > 0 && value >= 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/gpio%d/value", BBB_GPIOP, gpio);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_WRONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+			ret = snprintf(ptr, sizeof(ptr), "%d", (value > 0) ? 1 : 0);
+
+			if (write(fd, ptr, ret) < 0) {
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
 
 int bbb_getGpioValue(int gpio) {
 	static int ret = -1;
@@ -1071,3 +1136,5 @@ void bbb_showByTypeOnly(bbb_pin_type type) {
 		}
 	}
 }
+
+

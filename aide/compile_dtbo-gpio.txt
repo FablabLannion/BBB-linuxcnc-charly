@@ -1,0 +1,10 @@
+dtc -O dtb -o /lib/firmware/bspm_P8_30_37-00A0.dtbo -b 0 -@ bspm_P8_30_37-00A0.dts
+dtc -O dtb -o /lib/firmware/bspm_P9_23_7-00A0.dtbo -b 0 -@ bspm_P9_23_7-00A0.dts
+dtc -O dtb -o /lib/firmware/bspm_P9_24_37-00A0.dtbo -b 0 -@ bspm_P9_24_37-00A0.dts
+dtc -O dtb -o /lib/firmware/bspm_P9_26_37-00A0.dtbo -b 0 -@ bspm_P9_26_37-00A0.dts
+
+
+echo bspm_P8_30_37 > /sys/devices/bone_capemgr.?/slots
+echo bspm_P9_23_7 > /sys/devices/bone_capemgr.?/slots
+echo bspm_P9_24_37 > /sys/devices/bone_capemgr.?/slots
+echo bspm_P9_26_37 > /sys/devices/bone_capemgr.?/slots

@@ -1,9 +1,12 @@
 component rtmod_eqep "permit to use eqep from TI chip with linuxCNC";
 pin out float eqepPosition = 0;
-param rw unsigned eqepCount = 0;
+//param rw unsigned eqepCount = 0;
+pin out signed eqepCount = 0;
 pin in unsigned  positionScale = 1;
 param rw unsigned eqepChanel =0 if personality ;
 variable char *eqepPath;
+variable int dfeqep;
+variable int start = 1;
 function update_position; // add nofp if floating point not needed
 license "GPL"; // indicates GPL v2 or later
 author "Theo";
@@ -33,49 +36,68 @@ option extra_setup;
 // selection of base mem @ function of eqep channel. EQEP is a subsystem in pwmss module
 EXTRA_SETUP() { 
 //int i;
-
-rtapi_print ("enter extrasetup comp number %u and chanel %u",count,comp_id);
+int rc,dev,ret;
+       // char buf[4]="0000";
+//rtapi_print ("enter extrasetup comp number %u and chanel %u",count,comp_id);
 if(!count) count = 1;
 if(count) {
         //for(i=0; i<count; i++) {
 		rtapi_print ("enter extrasetup eqep inst %u",personality);
 switch (personality-1){  
 	case 0 :
-	bbb_enableEqep(0);
+//	bbb_enableEqep(0);
 	eqepPath="rteqep0";
+	
 	break;
 	case 1 :
-	bbb_enableEqep(1);
+//	bbb_enableEqep(1);
 	eqepPath="rteqep1";
 	break;
 	case 2 :
-	bbb_enableEqep(2);
+//	bbb_enableEqep(2);
 	eqepPath="rteqep2";
 	break;
 	};
+	
+dfeqep=rt_dev_open(eqepPath, 0);	
+//rc = rt_dev_write(dfeqep, "peu importe", 4);
+//if (rc < 1) { rtapi_print("write eqep device %s failed : %i",eqepPath,rc); rt_dev_close(dfeqep);return ;}
 //}	
 
 return 0;
 
 }}
 
+/*EXTRA_CLEANUP(){
+rtapi_print("close eqep");
+rt_dev_close(dfeqep);
+}*/
+
 
 FUNCTION(update_position) {
 	int rc,dev,ret;
-        char buf[4]="0000";
+       // char buf[4]="0000";
+   //    unsigned long  buf=0x00000000;
 //printf("eqep_count : %s \n", buf);
 //long long start_time=rtapi_get_clocks();
 // Open the file representing the position
 //rtapi_print("open eqep device start");
-	dev=rt_dev_open(eqepPath, 0);
+	//dev=rt_dev_open(eqepPath, 0);
 //	rtapi_print("eqep device %i opened",dev);
-        rc = rt_dev_read(dev, &buf, 4);
-        if (rc < 1) { rtapi_print("read  eqep device failed : %i",rc); return ;}
+//rc = rt_dev_write(dev, eqepCount, 4);
+if (start ==1 )
+{ rc = rt_dev_write(dfeqep, eqepCount, 4);
+        if (rc < 1) { rtapi_print("write eqep device %x failed : %i",dfeqep,rc); rt_dev_close(dfeqep);return ;}
+ start=0;
+ }    
+    //    rc = rt_dev_read(dev, &eqepCount, 4);
+        rc = rt_dev_read(dfeqep, &eqepCount, 4);
+        if (rc < 1) { rtapi_print("read  eqep device failed : %i",rc); rt_dev_close(dev);return ;}
 //rtapi_print("eqep_buf : %s \n", buf);
 // in buf the count is !
-eqepCount=*buf;
+//eqepCount=*buf;
 //rtapi_print("eqep_count : %i \n", eqepCount);
-	rt_dev_close(dev);	
+//	rt_dev_close(dev);	
 
 // Commit changes 
 //trnasform count to position using scale ie impulsion per unit)

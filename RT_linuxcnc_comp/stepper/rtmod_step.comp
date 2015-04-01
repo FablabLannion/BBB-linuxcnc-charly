@@ -1,19 +1,12 @@
-component rtmod_pwm "permit to use pwm from TI chip with linuxCNC";
-pin in float pwm_percent if personality;
-variable int pinHeaderA;
-variable int pinNumA;
-variable int pinHeaderB;
-variable int pinNumB;
-variable char pwmPathA[128];
-variable char pwmPathB[128];
-variable char *pwmA;
-variable char *pwmB;
-variable int pwmPeriod;
-variable int pwmPeriodB;
-variable int fdpwmA;
-variable int fdpwmB;
-variable float prev_pwm_percent=0;
-function pwmset;
+component rtmod_step "permit to control an extruder stepper motor";
+pin in bit extrustep;
+pin in bit extrudir;
+
+
+variable char *GPIOname[10];
+variable int fdgpio[32];
+variable int valtowrite[32];
+function update_step;
 license "GPL"; // indicates GPL v2 or later
 author "Theo";
 option extra_setup;
@@ -28,138 +21,50 @@ option extra_setup;
 #include <errno.h>
 #include <wordexp.h>
 #include <unistd.h>
-#include <math.h>
 #include "bbb.h"
-#define BBB_SLOTS "/sys/devices/bone_capemgr.*/slots"
+//#define BBB_SLOTS "/sys/devices/bone_capemgr.*/slots"
+#define BBB_GPIO_EXPORT "/sys/class/gpio/export"
+#define NUMGPIO 2
 
 
 EXTRA_SETUP() { 
+int i;
 
-char path1[128],path2[128],path3[128];
-if(!count) count = 1;
-if(count) {
-		rtapi_print ("enter extrasetup pwm inst %i",personality);
-	switch (personality-1)
-		{ 
-		case 0 :
-			pinHeaderA = 9;
-			pinHeaderB = 9;
-			pinNumA=22;
-			pinNumB=21;
-			pwmA="rtpwm0";
-			pwmB="rtpwm1";
-			break;
-		case 1 :
-			pinHeaderA = 8;
-			pinHeaderB = 8;
-			pinNumA=36;
-			pinNumB=34;
-			pwmA="rtpwm2";
-			pwmB="rtpwm3";
-			
-			break;
-		case 2 :
-			pinHeaderA = 8;
-			pinHeaderB = 8;
-			pinNumA=45;
-			pinNumB=46;
-			pwmA="rtpwm4";
-			pwmB="rtpwm5";
-			break;
-		};
-	
-fdpwmA=rt_dev_open(pwmA, 0);
-fdpwmB=rt_dev_open(pwmB, 0);
-/*(bbb_enablePwm(pinHeaderA, pinNumA)<0)?rtapi_print ("unable do enable pwmA"):rtapi_print ("enable pwmA");
-(bbb_setPwmPeriod(pinHeaderA, pinNumA, 50000)<0)?rtapi_print ("unable set periode pwmA"):rtapi_print ("set periode pwmA");*/
-pwmPeriod=(bbb_getPwmPeriod(pinHeaderA, pinNumA))/10;
-rtapi_print("periode : %i ",pwmPeriod);
-/*(bbb_setPwmPercent(pinHeaderA, pinNumA, 100)<0)?rtapi_print ("unable to reset percent pwmA"):rtapi_print ("reset percent pwmA");
-(bbb_enablePwm(pinHeaderB, pinNumB)<0)?rtapi_print ("unable do enable pwmB"):rtapi_print ("enable pwmB");
-(bbb_setPwmPercent(pinHeaderB, pinNumB, 100)<0)?rtapi_print ("unable to reset percent pwmB"):rtapi_print ("reset percent pwmB");*/
-rtapi_print ("fin extrasetup pwm");
+			rtapi_print ("enter extrasetup update_step inst");
 
+			GPIOname[0]="rtgpio1";//extruder step
+			GPIOname[1]="rtgpio2";//extruder dir
+			fdgpio[0]=rt_dev_open(GPIOname[0], 0);
+			fdgpio[1]=rt_dev_open(GPIOname[1], 0);
+			rtapi_print ("fin extrasetup pwm");
 
 return 0; 
 }
+
+
+FUNCTION(update_step) {
+int i,rc,devGPIO,ret,valGPIO;
+
+//static unsigned long GPIOnumtab[NUMGPIOIN]={15,25,14,23};//  0-15(P9-24), 2-25(P8-30), 0-14(P9-26)
+
+
+ valtowrite[1]=extrustep;
+valtowrite[2]=extrudir;
+
+for (i=0;i<NUMGPIO;i++){
+//devGPIO=rt_dev_open(GPIOname[i], 0);
+	
+	//rc=rt_dev_write(devGPIO,&valtowrite[i],1);
+	rc=rt_dev_write(fdgpio[i],&valtowrite[i],1);
+		if (rc < 0) 
+			{
+				rtapi_print("write gpio device failed : %i",rc);
+				rt_dev_close(devGPIO); 
+				return ;
+			}
+//	rt_dev_close(devGPIO);	
 }
 
-/*EXTRA_CLEANUP(){
-rtapi_print ("close pwm");
-rt_dev_close(fdpwmA);	
-rt_dev_close(fdpwmB);
-return ;
-
-}*/
-
-FUNCTION(pwmset) {
-int rc,devPwmA,devPwmB;
-unsigned short  pwmShortPeriodFree;
-pwmShortPeriodFree=0x0000;
-
-
-if (fabs(prev_pwm_percent - pwm_percent) > 0.001)
-	{
-		prev_pwm_percent = pwm_percent;
-		//rtapi_print("pwm_percent : %f ",pwm_percent);
-		//rtapi_print("prev_pwm_percent : %f ",prev_pwm_percent);
-		//devPwmA=rt_dev_open(pwmA, 0);
-		//rtapi_print("devices pwmA ouvert");
-//		devPwmB=rt_dev_open(pwmB, 0);
-		//rtapi_print("devices pwmB ouvert");
-
-		if(pwm_percent<0)
-			{
-			//	rtapi_print("pwm sens negatif");
-				//bbb_setPwmPercent(pinHeaderA, pinNumA, 100,pwmPathA,pwmPeriodA);
-				rc=rt_dev_write(fdpwmA,(const void *)&pwmPeriod,2);
-				if (rc < 1) 
-					{
-						rtapi_print("write pwma device failed : %i",rc);
-						rt_dev_close(fdpwmA);	
-						rt_dev_close(fdpwmB);
-						return ;
-					}
-				//rtapi_print("pwma write :%i - ret :%i",pwmPeriod,rc);
-				pwmShortPeriodFree=pwmPeriod*(1.+pwm_percent);
-				
-				rc=rt_dev_write(fdpwmB,(const void *)&pwmShortPeriodFree,2);
-				if (rc < 1) 
-					{ 
-						rtapi_print("write pwmB device failed : %i",rc);
-						rt_dev_close(fdpwmA);	
-						rt_dev_close(fdpwmB);	
-						return ;
-					}
-				//rtapi_print("pwmb write :%i - ret :%i",pwmShortPeriodFree,rc);
-			}
-			else
-				{
-					//rtapi_print("pwm sens positif");
-					rc=rt_dev_write(fdpwmB,(const void *)&pwmPeriod,2);
-					if (rc < 1) 
-						{
-							rtapi_print("write pwmb device failed : %i",rc);
-							rt_dev_close(fdpwmA);	
-							rt_dev_close(fdpwmB);
-							return ;
-						}
-					//rtapi_print("pwmb write :%i - ret :%i",pwmPeriod,rc);
-					pwmShortPeriodFree=pwmPeriod*(1-pwm_percent);
-					rc=rt_dev_write(fdpwmA,(const void *)&pwmShortPeriodFree,2);
-					if (rc < 1) 
-						{
-							rtapi_print("write pwm A device failed : %i",rc);
-							rt_dev_close(fdpwmA);	
-							rt_dev_close(fdpwmB);
-							return ;
-						}
-					//rtapi_print("pwma write :%i - ret :%i",pwmShortPeriodFree,rc);
-				}
-	//	rt_dev_close(devPwmA);	
-	//	rt_dev_close(devPwmB);	
-		
-	}
 return ;
 }
 
@@ -579,7 +484,37 @@ int bbb_getGpioDirection(int gpio) {
 	return ret;
 }
 
+int bbb_setGpioValue(int gpio, int value) {
+	static int ret = -1;
+	int fd = -1;
+	char path[128];
+	char ptr[128];
+	char *wpath = NULL;
 
+	if (gpio > 0 && value >= 0) {
+		memset(path, 0, sizeof(path));
+		snprintf(path, sizeof(path), "%s/gpio%d/value", BBB_GPIOP, gpio);
+
+		if ((wpath = bbb_wildCardPath(path)) != NULL) {
+			if ((fd = open(wpath, O_WRONLY)) < 0) {
+				return -1;
+			}
+
+			memset(ptr, 0, sizeof(ptr));
+			ret = snprintf(ptr, sizeof(ptr), "%d", (value > 0) ? 1 : 0);
+
+			if (write(fd, ptr, ret) < 0) {
+				ret = -1;
+			} else {
+				ret = 0;
+			}
+
+			close(fd);
+		}
+	}
+
+	return ret;
+}
 
 int bbb_getGpioValue(int gpio) {
 	static int ret = -1;
@@ -1071,3 +1006,5 @@ void bbb_showByTypeOnly(bbb_pin_type type) {
 		}
 	}
 }
+
+

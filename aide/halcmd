@@ -1,0 +1,55 @@
+loadrt threads name1=test-thread period1=50000
+loadrt rtmod_eqep count=3 personality=1,2,3
+addf rtmod-eqep.0.update-position test-thread 
+addf rtmod-eqep.1.update-position test-thread 
+addf rtmod-eqep.2.update-position test-thread 
+start
+
+
+loadrt threads name1=test-thread period1=100000
+loadrt rtmod_pwm count=3 personality=1,2,3
+addf rtmod-pwm.0.pwmset test-thread 
+addf rtmod-pwm.1.pwmset test-thread
+addf rtmod-pwm.2.pwmset test-thread
+loadrt rtmod_gpio 
+addf rtmod-gpio.0.powerctl test-thread
+start
+setp rtmod-gpio.0.enable-pwm 1
+
+
+
+loadrt threads name1=test-thread period1=1000000000
+loadrt rtmod_pwm_test count=3 personality=1,2,3
+addf rtmod-pwm-test.0.pwmset test-thread 
+addf rtmod-pwm-test.1.pwmset test-thread
+addf rtmod-pwm-test.2.pwmset test-thread
+start
+
+
+loadrt threads name1=test-thread period1=1000000000
+loadrt rtmod_gpio count=3 personality=1,2,3
+addf rtmod-gpio.2.pwmgpioset test-thread 
+addf rtmod-gpio.0.pwmgpioset test-thread
+addf rtmod-gpio.1.pwmgpioset test-thread
+start
+
+loadrt threads name1=test-thread period1=5000000000
+loadrt rtmod_gpio 
+addf rtmod-gpio.0.powerctl test-thread
+start
+
+
+loadrt threads name1=test-thread period1=5000000000
+loadrt rtmod_step 
+addf rtmod-step.0.update-step test-thread
+start
+
+
+
+echo am33xx_pwm > /sys/devices/bone_capemgr.9/slots
+echo bone_pwm_P8_13 > /sys/devices/bone_capemgr.9/slots
+echo bone_pwm_P8_29 > /sys/devices/bone_capemgr.9/slots
+echo bone_pwm_P8_34 > /sys/devices/bone_capemgr.9/slots
+echo bone_pwm_P8_36 > /sys/devices/bone_capemgr.9/slots
+echo bone_pwm_P9_22 > /sys/devices/bone_capemgr.9/slots
+echo bone_pwm_P9_23 > /sys/devices/bone_capemgr.9/slots
