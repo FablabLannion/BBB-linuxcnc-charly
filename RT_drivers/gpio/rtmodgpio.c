@@ -33,7 +33,7 @@
  static unsigned long        GPIOINaddr[4]={0x44E07138,0x4804C138,0x481AC138,0x481AE138};
   static unsigned long        GPIObankaddrtab[MAX_DEVICES]={1,2,2,0,2,0,2};// out en premier, in ensuite 1-17(P9-23), 2-22(P8-27),2-24(P8-28),0-15(P9-24), 2-25(P8-30), 0-14(P9-26), 2-23(P8-29)
  // static unsigned long        GPIOnumtab[MAX_DEVICES]={17,15,89,14};// 1-17(P9-23), 0-15(P9-24),2-25(P8-30), 0-14(P9-26)
- static unsigned long        GPIOaddr[MAX_DEVICES]={0x00020000,0x00400000,0x01000000,0x00008000,0x02000000,0x00004000,0x00800000};// bit 17 à 1, bit 22 , bit 24 bit 15 à 1, bit 25 à 1, bit 14 à 1, bit 23
+ static unsigned long        GPIOaddr[MAX_DEVICES]={0x00020000,0x00400000,0x01000000,0x00008000,0x02000000,0x00008000,0x00800000};// bit 17 à 1, bit 22 , bit 24 bit 15 à 1, bit 25 à 1, bit 14 à 1, bit 23
  static void* GPIOCLRmemaddr[MAX_DEVICES];
  static void* GPIOSETmemaddr[MAX_DEVICES];
  static void* GPIOINmemaddr[MAX_DEVICES];

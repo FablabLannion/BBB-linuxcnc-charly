@@ -1,0 +1,213 @@
+Cmp-Mod V01 Created by CvPcb (2013-07-07 BZR 4022)-stable date = 24/03/2015 16:15:10
+
+BeginCmp
+TimeStamp = /5507F0F9;
+Reference = D1;
+ValeurCmp = ZENER;
+IdModule  = D3;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507F0CF;
+Reference = D2;
+ValeurCmp = ZENER;
+IdModule  = D3;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507EFF0;
+Reference = D3;
+ValeurCmp = ZENER;
+IdModule  = D3;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507F0DE;
+Reference = D4;
+ValeurCmp = ZENER;
+IdModule  = D3;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507F0B4;
+Reference = D5;
+ValeurCmp = ZENER;
+IdModule  = D3;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507EEFC;
+Reference = D6;
+ValeurCmp = ZENER;
+IdModule  = D3;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507FBA1;
+Reference = EnPower1;
+ValeurCmp = OPTO-SPARK;
+IdModule  = opto-spark-dim-ok;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507FE4E;
+Reference = P1;
+ValeurCmp = CONN_2;
+IdModule  = PIN_ARRAY_2X1;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507FE5B;
+Reference = P2;
+ValeurCmp = CONN_2;
+IdModule  = PIN_ARRAY_2X1;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507FE61;
+Reference = P3;
+ValeurCmp = CONN_2;
+IdModule  = PIN_ARRAY_2X1;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507FE67;
+Reference = P4;
+ValeurCmp = CONN_2;
+IdModule  = PIN_ARRAY_2X1;
+EndCmp
+
+BeginCmp
+TimeStamp = /55080202;
+Reference = P5;
+ValeurCmp = CONN_2;
+IdModule  = PIN_ARRAY_2X1;
+EndCmp
+
+BeginCmp
+TimeStamp = /55082AAB;
+Reference = P6;
+ValeurCmp = CONN_2;
+IdModule  = PIN_ARRAY_2X1;
+EndCmp
+
+BeginCmp
+TimeStamp = /550A9AFB;
+Reference = P7;
+ValeurCmp = CONN_5;
+IdModule  = PIN_ARRAY_5x1;
+EndCmp
+
+BeginCmp
+TimeStamp = /55015D2C;
+Reference = P8;
+ValeurCmp = BONE_P8;
+IdModule  = BoneHdr;
+EndCmp
+
+BeginCmp
+TimeStamp = /55015D3B;
+Reference = P9;
+ValeurCmp = BONE_P8;
+IdModule  = BoneHdr;
+EndCmp
+
+BeginCmp
+TimeStamp = /550A9B0A;
+Reference = P10;
+ValeurCmp = CONN_5;
+IdModule  = PIN_ARRAY_5x1;
+EndCmp
+
+BeginCmp
+TimeStamp = /550A9894;
+Reference = P11;
+ValeurCmp = CONN_5;
+IdModule  = PIN_ARRAY_5x1;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507FBBF;
+Reference = PwmX1;
+ValeurCmp = OPTO-SPARK;
+IdModule  = opto-spark-dim-ok;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507FBD7;
+Reference = PwmY1;
+ValeurCmp = OPTO-SPARK;
+IdModule  = opto-spark-dim-ok;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507FB5E;
+Reference = PwmZ1;
+ValeurCmp = OPTO-SPARK;
+IdModule  = opto-spark-dim-ok;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507F0E4;
+Reference = R1;
+ValeurCmp = R;
+IdModule  = R3;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507F0EC;
+Reference = R2;
+ValeurCmp = R;
+IdModule  = R3;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507F0BA;
+Reference = R3;
+ValeurCmp = R;
+IdModule  = R3;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507F0C2;
+Reference = R4;
+ValeurCmp = R;
+IdModule  = R3;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507EF0B;
+Reference = R5;
+ValeurCmp = R;
+IdModule  = R3;
+EndCmp
+
+BeginCmp
+TimeStamp = /5507EFE3;
+Reference = R6;
+ValeurCmp = R;
+IdModule  = R3;
+EndCmp
+
+BeginCmp
+TimeStamp = /52701D42;
+Reference = X1;
+ValeurCmp = RJ45;
+IdModule  = RJ45_shield;
+EndCmp
+
+BeginCmp
+TimeStamp = /526FDC1F;
+Reference = Y1;
+ValeurCmp = RJ45;
+IdModule  = RJ45_shield;
+EndCmp
+
+BeginCmp
+TimeStamp = /52701D48;
+Reference = Z1;
+ValeurCmp = RJ45;
+IdModule  = RJ45_shield;
+EndCmp
+
+EndListe

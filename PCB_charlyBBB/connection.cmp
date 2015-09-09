@@ -1,0 +1,73 @@
+Cmp-Mod V01 Created by CvPcb (2013-07-07 BZR 4022)-stable date = 21/12/2013 22:15:16
+
+BeginCmp
+TimeStamp = /52B5FB13;
+Reference = J1;
+ValeurCmp = DB25;
+IdModule  = DB25FC;
+EndCmp
+
+BeginCmp
+TimeStamp = /52B5FB03;
+Reference = J2;
+ValeurCmp = DB25;
+IdModule  = DB25FC;
+EndCmp
+
+BeginCmp
+TimeStamp = /52B5FC69;
+Reference = J3;
+ValeurCmp = RJ45;
+IdModule  = RJ45_TRANSFO;
+EndCmp
+
+BeginCmp
+TimeStamp = /52B5FC63;
+Reference = J4;
+ValeurCmp = RJ45;
+IdModule  = RJ45_TRANSFO;
+EndCmp
+
+BeginCmp
+TimeStamp = /52B5FB4D;
+Reference = J5;
+ValeurCmp = RJ45;
+IdModule  = RJ45_TRANSFO;
+EndCmp
+
+BeginCmp
+TimeStamp = /52B5FD20;
+Reference = K1;
+ValeurCmp = ctrl-X;
+IdModule  = bornier3;
+EndCmp
+
+BeginCmp
+TimeStamp = /52B5FD2D;
+Reference = K2;
+ValeurCmp = ctrl-Y;
+IdModule  = bornier3;
+EndCmp
+
+BeginCmp
+TimeStamp = /52B5FD33;
+Reference = K3;
+ValeurCmp = ctrl-Z;
+IdModule  = bornier3;
+EndCmp
+
+BeginCmp
+TimeStamp = /52B5FD39;
+Reference = K4;
+ValeurCmp = ctrl-;
+IdModule  = bornier3;
+EndCmp
+
+BeginCmp
+TimeStamp = /52B5FCB8;
+Reference = P1;
+ValeurCmp = alim;
+IdModule  = bornier2;
+EndCmp
+
+EndListe
